@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Nom du Worker : l'URL publique sera https://<name>.<votre-sous-domaine>.workers.dev
+  "name": "imposteurs",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    // Seules les routes /api/* réveillent le Worker ; le reste est servi gratuitement en statique.
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "GAMES", "class_name": "GameRoom" }]
+  },
+  // Les Durable Objects SQLite sont les seuls disponibles sur l'offre gratuite.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+  "observability": { "enabled": false }
+}

@@ -1,0 +1,290 @@
+import { useEffect, useState } from 'preact/hooks';
+import { GAME_CODE_RE } from '../shared/protocol';
+import { gmConn, go, playerConn, startGmConn, startPlayerConn } from './conn';
+import { GmApp } from './gm';
+import { PlayerApp } from './player';
+import { PrintPage } from './print';
+import { RulesPage } from './rules';
+import { sessions, storageAvailable } from './session';
+import { toast, Toasts, unlockAudio } from './ui';
+
+function useHash(): string {
+  const [h, setH] = useState(location.hash.slice(1) || '/');
+  useEffect(() => {
+    const on = () => setH(location.hash.slice(1) || '/');
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  return h;
+}
+
+export function App() {
+  const h = useHash();
+  let page;
+  if (h.startsWith('/s/')) {
+    // QR code d'un poste lu avec l'appareil photo du téléphone
+    sessionStorage.setItem('imposteurs.pendingScan', h.slice(3));
+    go(sessions.player() ? '/play' : '/');
+    page = null;
+  } else if (h === '/play') {
+    const c = playerConn();
+    page = c ? <PlayerApp conn={c} /> : <Home />;
+  } else if (h === '/gm') {
+    const c = gmConn();
+    page = c ? <GmApp conn={c} /> : <Home />;
+  } else if (h === '/print') {
+    const c = gmConn();
+    page = c ? <PrintPage conn={c} /> : <Home />;
+  } else if (h.startsWith('/regles')) {
+    page = <RulesPage />;
+  } else if (h.startsWith('/j/')) {
+    page = <Home presetCode={h.slice(3)} />;
+  } else page = <Home />;
+  return (
+    <>
+      {page}
+      <Toasts />
+    </>
+  );
+}
+
+function Home({ presetCode }: { presetCode?: string }) {
+  const ps = sessions.player();
+  const gs = sessions.gm();
+  const [mode, setMode] = useState<'join' | 'gm' | 'reclaim'>('join');
+  return (
+    <div class="wrap stack">
+      <div class="center" style={{ paddingTop: '12px' }}>
+        <img src="/icons/icon.svg" alt="" width={84} height={84} />
+        <h1 style={{ fontSize: '2rem', margin: '6px 0 0' }}>IMPOSTEURS</h1>
+        <p class="muted" style={{ marginTop: 0 }}>
+          Le jeu de rôles cachés grandeur nature, inspiré d’Among Us.
+        </p>
+      </div>
+      {!storageAvailable() && <p class="card warn">Votre navigateur bloque le stockage local (navigation privée ?) : en cas de rechargement, demandez un code de reconnexion au maître du jeu.</p>}
+      {ps && (
+        <a class="btn big block crew" href="#/play">
+          ▶ Reprendre ma partie ({ps.code})
+        </a>
+      )}
+      {gs && (
+        <a class="btn big block" href="#/gm">
+          🎬 Mon tableau de bord MJ ({gs.code})
+        </a>
+      )}
+      <div class="row">
+        <button class={`btn small ${mode === 'join' ? 'primary' : ''}`} onClick={() => setMode('join')}>
+          Rejoindre
+        </button>
+        <button class={`btn small ${mode === 'gm' ? 'primary' : ''}`} onClick={() => setMode('gm')}>
+          Maître du jeu
+        </button>
+        <button class={`btn small ${mode === 'reclaim' ? 'primary' : ''}`} onClick={() => setMode('reclaim')}>
+          Récupérer ma session
+        </button>
+      </div>
+      {mode === 'join' && <JoinForm preset={presetCode} />}
+      {mode === 'gm' && <GmForms />}
+      {mode === 'reclaim' && <ReclaimForm />}
+      <a class="btn block" href="#/regles">
+        📖 Règles du jeu
+      </a>
+      <p class="muted center" style={{ fontSize: '0.85rem' }}>
+        Aucun compte, aucune publicité. Seul un identifiant aléatoire de session est gardé sur ce téléphone. Projet de fans non affilié à Innersloth.
+      </p>
+    </div>
+  );
+}
+
+async function gameInfo(code: string): Promise<{ exists: boolean; phase?: string; locked?: boolean }> {
+  try {
+    const r = await fetch(`/api/games/${code}/info`);
+    return await r.json();
+  } catch {
+    return { exists: false };
+  }
+}
+
+function JoinForm({ preset }: { preset?: string }) {
+  const [code, setCode] = useState(normalizeGame(preset ?? ''));
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>();
+  return (
+    <form
+      class="card stack"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        unlockAudio();
+        setErr(undefined);
+        const c = normalizeGame(code);
+        if (!GAME_CODE_RE.test(c)) return setErr('Le code de partie fait 6 caractères.');
+        setBusy(true);
+        const info = await gameInfo(c);
+        if (!info.exists) {
+          setBusy(false);
+          return setErr('Aucune partie avec ce code.');
+        }
+        if (info.phase !== 'lobby') {
+          setBusy(false);
+          return setErr('La partie a déjà commencé. Si vous en faisiez partie, utilisez « Récupérer ma session » avec un code donné par le maître du jeu.');
+        }
+        const conn = startPlayerConn(c, { kind: 'join', name: name.trim() });
+        const prev = conn.onAuthFailed;
+        const off = conn.store.subscribe((s) => {
+          if (s.view) {
+            off();
+            conn.onAuthFailed = prev;
+            setBusy(false);
+            go('/play');
+          }
+        });
+        conn.onAuthFailed = (_code, msg) => {
+          off();
+          conn.close();
+          setBusy(false);
+          setErr(msg);
+        };
+      }}
+    >
+      <h2>Rejoindre une partie</h2>
+      <label class="field">
+        <span>Code de la partie</span>
+        <input class="code" value={code} maxLength={6} autoComplete="off" autoCapitalize="characters" onInput={(e) => setCode(normalizeGame((e.target as HTMLInputElement).value))} />
+      </label>
+      <label class="field">
+        <span>Votre pseudonyme (visible par tous)</span>
+        <input value={name} maxLength={16} autoComplete="nickname" onInput={(e) => setName((e.target as HTMLInputElement).value)} placeholder="ex. Lucie" />
+      </label>
+      {err && <p class="card danger">{err}</p>}
+      <button class="btn big block primary" disabled={busy || name.trim().length < 2 || code.length !== 6}>
+        {busy ? 'Connexion…' : 'Entrer dans le salon'}
+      </button>
+    </form>
+  );
+}
+
+function normalizeGame(s: string) {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+}
+
+function GmForms() {
+  const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState('');
+  const [secret, setSecret] = useState('');
+  const [err, setErr] = useState<string>();
+  return (
+    <>
+      <div class="card stack">
+        <h2>Créer une partie</h2>
+        <p class="muted">Vous serez le maître du jeu (vous ne jouez pas). Le terrain et les réglages enregistrés sur cet appareil sont réutilisés.</p>
+        <button
+          class="btn big block primary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await fetch('/api/games', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ terrain: sessions.terrain(), settings: sessions.settings() }),
+              });
+              const d = await r.json();
+              if (!r.ok) throw new Error(d.error ?? 'Erreur');
+              sessions.setGm({ code: d.code, token: d.gmToken, secret: d.gmSecret });
+              startGmConn(d.code, { kind: 'token', token: d.gmToken }, d.gmSecret);
+              go('/gm');
+            } catch (e) {
+              toast(`Création impossible : ${(e as Error).message}. Vérifiez la connexion.`, 'err');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? 'Création…' : '＋ Créer une nouvelle partie'}
+        </button>
+      </div>
+      <form
+        class="card stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setErr(undefined);
+          const c = normalizeGame(code);
+          const conn = startGmConn(c, { kind: 'gmLogin', secret }, secret);
+          const prev = conn.onAuthFailed;
+          const off = conn.store.subscribe((s) => {
+            if (s.view) {
+              off();
+              conn.onAuthFailed = prev;
+              go('/gm');
+            }
+          });
+          conn.onAuthFailed = (_c, msg) => {
+            off();
+            conn.close();
+            setErr(msg);
+          };
+        }}
+      >
+        <h2>Reprendre une partie sur cet appareil</h2>
+        <label class="field">
+          <span>Code de la partie</span>
+          <input class="code" value={code} maxLength={6} onInput={(e) => setCode(normalizeGame((e.target as HTMLInputElement).value))} />
+        </label>
+        <label class="field">
+          <span>Code maître du jeu (affiché à la création)</span>
+          <input class="code" value={secret} maxLength={9} onInput={(e) => setSecret((e.target as HTMLInputElement).value.toUpperCase())} />
+        </label>
+        {err && <p class="card danger">{err}</p>}
+        <button class="btn block" disabled={code.length !== 6 || secret.length < 8}>
+          Ouvrir le tableau de bord
+        </button>
+      </form>
+    </>
+  );
+}
+
+function ReclaimForm() {
+  const [code, setCode] = useState('');
+  const [rc, setRc] = useState('');
+  const [err, setErr] = useState<string>();
+  return (
+    <form
+      class="card stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setErr(undefined);
+        const c = normalizeGame(code);
+        const conn = startPlayerConn(c, { kind: 'reclaim', code: rc.replace(/[^A-Z0-9]/g, '') });
+        const prev = conn.onAuthFailed;
+        const off = conn.store.subscribe((s) => {
+          if (s.view) {
+            off();
+            conn.onAuthFailed = prev;
+            go('/play');
+          }
+        });
+        conn.onAuthFailed = (_c, msg) => {
+          off();
+          conn.close();
+          setErr(msg);
+        };
+      }}
+    >
+      <h2>Récupérer ma session</h2>
+      <p class="muted">Vous avez changé de téléphone ou effacé votre navigateur ? Demandez un code de reconnexion au maître du jeu.</p>
+      <label class="field">
+        <span>Code de la partie</span>
+        <input class="code" value={code} maxLength={6} onInput={(e) => setCode(normalizeGame((e.target as HTMLInputElement).value))} />
+      </label>
+      <label class="field">
+        <span>Code de reconnexion</span>
+        <input class="code" value={rc} maxLength={6} onInput={(e) => setRc((e.target as HTMLInputElement).value.toUpperCase())} />
+      </label>
+      {err && <p class="card danger">{err}</p>}
+      <button class="btn block primary" disabled={code.length !== 6 || rc.length < 6}>
+        Récupérer
+      </button>
+    </form>
+  );
+}

@@ -1,0 +1,36 @@
+{
+  "name": "imposteurs-grandeur-nature",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jeu à rôles cachés grandeur nature inspiré d'Among Us : PWA multijoueur temps réel (Cloudflare Workers + Durable Objects).",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && wrangler dev --ip 0.0.0.0 --port 8787",
+    "dev:client": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
+    "test": "vitest run",
+    "test:integration": "vite build && vitest run -c vitest.integration.config.ts",
+    "test:browser": "node test/browser/run.mjs",
+    "test:all": "npm run typecheck && npm test && npm run build && npm run test:integration && npm run test:browser",
+    "local": "npm run build && wrangler dev --ip 0.0.0.0 --port 8787",
+    "deploy": "npm run build && wrangler deploy",
+    "docs:pdf": "node scripts/build-docs.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0",
+    "marked": "^18.0.0",
+    "preact": "^10.29.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261023.1",
+    "@preact/preset-vite": "^2.10.0",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.0",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.150.0"
+  }
+}
