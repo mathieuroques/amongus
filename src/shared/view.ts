@@ -342,8 +342,9 @@ export function viewForPlayer(s: GameState, playerId: string, now: number): Play
       taskBar = total ? done / total : 0;
     } else taskBar = s.taskBarSnapshot;
   }
-  // Pendant « Communications coupées », un membre d'équipage vivant ne voit plus sa liste de tâches.
-  const tasksHidden = started && comms && !isImp && me.alive;
+  // Pendant « Communications coupées », un joueur vivant ne voit plus sa liste de tâches
+  // (imposteurs compris, pour que leur écran reste identique à celui d'un équipier).
+  const tasksHidden = started && comms && me.alive;
   const view: PlayerView = {
     kind: 'player',
     now,

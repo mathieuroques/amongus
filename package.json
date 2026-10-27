@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
     "test": "vitest run",
     "test:integration": "vite build && vitest run -c vitest.integration.config.ts",
-    "test:browser": "node test/browser/run.mjs",
+    "test:browser": "vite build && vitest run -c vitest.browser.config.ts",
     "test:all": "npm run typecheck && npm test && npm run build && npm run test:integration && npm run test:browser",
     "local": "npm run build && wrangler dev --ip 0.0.0.0 --port 8787",
     "deploy": "npm run build && wrangler deploy",

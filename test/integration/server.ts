@@ -13,8 +13,12 @@ export const persistDir = mkdtempSync(join(tmpdir(), 'imposteurs-it-'));
 let proc: ChildProcess | undefined;
 
 export async function startServer() {
+  // Le port doit être libre : sinon on testerait un ancien serveur.
+  const busy = await fetch(`${BASE}/api/health`).then(() => true, () => false);
+  if (busy) throw new Error(`Le port ${PORT} est déjà utilisé (ancien serveur de test ?).`);
   proc = spawn('npx', ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1', '--persist-to', persistDir, '--show-interactive-dev-session=false'], {
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true, // groupe de processus dédié : on pourra arrêter wrangler ET workerd
     env: { ...process.env, WRANGLER_SEND_METRICS: 'false', NO_COLOR: '1' },
   });
   let out = '';
@@ -37,11 +41,26 @@ export async function stopServer() {
   if (!proc) return;
   const p = proc;
   proc = undefined;
-  p.kill('SIGTERM');
-  await new Promise((r) => {
+  const done = new Promise((r) => {
     p.once('exit', r);
     setTimeout(r, 5000);
   });
+  try {
+    process.kill(-p.pid!, 'SIGTERM');
+  } catch {
+    p.kill('SIGTERM');
+  }
+  await done;
+  // attendre la libération réelle du port
+  for (let i = 0; i < 50; i++) {
+    if (!(await fetch(`${BASE}/api/health`).then(() => true, () => false))) return;
+    await sleep(200);
+  }
+  try {
+    process.kill(-p.pid!, 'SIGKILL');
+  } catch {
+    /* déjà arrêté */
+  }
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

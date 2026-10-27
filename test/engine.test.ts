@@ -495,6 +495,23 @@ describe('sabotages', () => {
     expect(err(() => act(s, c, { type: 'startTask', code: st.code, taskId: t.taskId }))).toBe('blocked_task');
   });
 
+  it('un imposteur a le même écran qu\u2019un équipier pendant panne et communications (aucun indice visuel)', () => {
+    const s = setup(10, 2);
+    advance(15_000);
+    const i = imps(s)[0];
+    act(s, imps(s)[1], { type: 'sabotage', kind: 'lights' });
+    const t = i.tasks[0];
+    const def = s.terrain.tasks.find((d) => d.id === t.taskId)!;
+    const st = s.terrain.stations.find((x) => x.id === def.steps[0].stationId)!;
+    expect(err(() => act(s, i, { type: 'startTask', code: st.code, taskId: t.taskId }))).toBe('blocked_task');
+    gmAction(s, { type: 'fixSabotage' }, ctx());
+    advance(31_000);
+    act(s, imps(s)[1], { type: 'sabotage', kind: 'comms' });
+    const vi = viewForPlayer(s, i.id, clock);
+    expect(vi.me.tasksHidden).toBe(true);
+    expect(vi.me.tasks).toBeUndefined();
+  });
+
   it('réacteur : il faut deux joueurs vivants simultanément sur deux postes différents', () => {
     const s = setup(10, 2, { reactorSec: 60 });
     advance(15_000);

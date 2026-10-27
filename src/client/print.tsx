@@ -98,7 +98,9 @@ function StationSheet({ s, t }: { s: Station; t: Terrain }) {
       <ul>
         {tasksHere.map((k) => (
           <li key={k.id}>
-            {k.name} — {k.steps.filter((st) => st.stationId === s.id).map((st) => GAMES[st.game].label).join(', ')}
+            {k.name}
+            {k.steps.filter((st) => st.stationId === s.id).some((st) => GAMES[st.game].label !== k.name) &&
+              ` — ${k.steps.filter((st) => st.stationId === s.id).map((st) => GAMES[st.game].label).join(', ')}`}
           </li>
         ))}
       </ul>

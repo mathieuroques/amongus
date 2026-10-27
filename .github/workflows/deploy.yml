@@ -1,0 +1,34 @@
+name: Déploiement Cloudflare
+# Se lance à chaque push sur main (et à la demande). Ne fait rien tant que les deux secrets
+# CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID ne sont pas définis dans le dépôt GitHub.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Vérifier la présence des secrets
+        id: check
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Secrets Cloudflare absents : déploiement ignoré (voir README, section Mise en ligne)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.check.outputs.skip != 'true'
+      - run: npm test
+        if: steps.check.outputs.skip != 'true'
+      - run: npm run deploy
+        if: steps.check.outputs.skip != 'true'

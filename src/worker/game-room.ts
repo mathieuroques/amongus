@@ -20,6 +20,8 @@ interface Attachment {
 const MAX_MSG = 400_000;
 const RATE_WINDOW = 10_000;
 const RATE_MAX = 60;
+/** Une partie inactive depuis 7 jours est effacée. */
+export const RETENTION_MS = 7 * 24 * 3600_000;
 
 export class GameRoom extends DurableObject<Env> {
   private state?: GameState;
@@ -63,6 +65,7 @@ export class GameRoom extends DurableObject<Env> {
   private async save() {
     if (!this.state) return;
     this.state.seq++;
+    this.state.updatedAt = Date.now();
     await this.ctx.storage.put('state', this.state);
     await this.scheduleAlarm();
   }
@@ -71,8 +74,9 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.state) return;
     const now = Date.now();
     const next = nextWakeup(this.state, now);
-    if (next !== undefined) await this.ctx.storage.setAlarm(Math.max(next, now + 50));
-    else await this.ctx.storage.deleteAlarm();
+    // Sans minuteur de jeu en attente, l'alarme sert à effacer la partie après RETENTION_MS d'inactivité.
+    const purgeAt = (this.state.updatedAt ?? now) + RETENTION_MS;
+    await this.ctx.storage.setAlarm(next !== undefined ? Math.max(next, now + 50) : Math.max(purgeAt, now + 1000));
   }
 
   private send(ws: WebSocket, msg: ServerMsg) {
@@ -295,6 +299,13 @@ export class GameRoom extends DurableObject<Env> {
   async alarm() {
     const s = this.state;
     if (!s) return;
+    if (Date.now() - (s.updatedAt ?? s.createdAt) >= RETENTION_MS && nextWakeup(s, Date.now()) === undefined) {
+      // Effacement automatique : aucune donnée (pseudonymes compris) n'est conservée au-delà.
+      for (const ws of this.ctx.getWebSockets()) ws.close(4004, 'partie expirée');
+      await this.ctx.storage.deleteAll();
+      this.state = undefined;
+      return;
+    }
     if (tick(s, Date.now())) {
       await this.save();
       this.broadcast();

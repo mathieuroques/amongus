@@ -625,7 +625,8 @@ export { challengeView };
 
 function taskBlockReason(s: GameState, p: PlayerState, station: Station): string | undefined {
   if (s.sabotage?.kind === 'doors' && s.sabotage.roomId === station.roomId) return 'Salle condamnée : revenez quand elle sera rouverte.';
-  if (s.sabotage?.kind === 'lights' && p.role === 'crewmate' && p.alive) return 'Panne de courant : les postes sont hors service. Réparez au poste Énergie.';
+  // Tous les vivants sont concernés (imposteurs compris) : le téléphone d'un imposteur se comporte comme celui d'un équipier.
+  if (s.sabotage?.kind === 'lights' && p.alive) return 'Panne de courant : les postes sont hors service. Réparez au poste Énergie.';
   if (bodyPending(p)) return 'Vous êtes un corps : restez sur place jusqu’à la découverte ou la prochaine réunion.';
   return undefined;
 }

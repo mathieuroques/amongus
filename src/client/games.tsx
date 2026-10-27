@@ -322,7 +322,8 @@ function TextAnswer({ c, done, numeric }: GameProps & { numeric?: boolean }) {
       }}
     >
       <p>
-        <strong>{numeric ? String(c.params.question) : `Mot de ${c.params.letters} lettres formé par les bandes du poste :`}</strong>
+        Énigme « {c.taskName} » de la fiche du poste :<br />
+        <strong>{numeric ? String(c.params.question) : `Mot de ${c.params.letters} lettres formé par les bandes :`}</strong>
       </p>
       <input class="code" inputMode={numeric ? 'numeric' : 'text'} value={v} autoComplete="off" onInput={(e) => setV((e.target as HTMLInputElement).value)} />
       <button class="btn big block primary" disabled={!v.trim()}>

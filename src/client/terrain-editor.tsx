@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { GAMES, STATION_KIND_LABEL, TASK_TYPE_LABEL } from '../shared/catalog';
-import { CODE_ALPHABET, randomCode } from '../shared/rng';
+import { CODE_ALPHABET, normalizeCode, randomCode } from '../shared/rng';
 import { EXAMPLE_ROOMS, generateTerrain, newId } from '../shared/terrain';
 import type { GameKind, StationKind, TaskType, Terrain } from '../shared/types';
 import type { GmView } from '../shared/view';
 import type { Connection } from './net';
+import { Scanner } from './scanner';
 import { sessions } from './session';
 import { ActButton, toast } from './ui';
 
@@ -40,6 +41,26 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
   return (
     <div class="stack">
       {!editable && <p class="card warn">Le terrain est verrouillé pendant la partie. Il se modifie dans le salon.</p>}
+      <details class="card">
+        <summary>
+          <strong>🔍 Vérifier une fiche imprimée</strong> (scannez un QR code posé dans la maison pour contrôler qu’il correspond au bon poste)
+        </summary>
+        <div style={{ marginTop: '12px' }}>
+          <Scanner
+            manualLabel="Code imprimé sur la fiche"
+            onCode={async (raw) => {
+              const c = normalizeCode(raw);
+              const s = v.terrain.stations.find((x) => x.code === c);
+              if (!s) {
+                toast(`Code ${c} inconnu : cette fiche ne correspond pas au terrain enregistré (réimprimez-la).`, 'err');
+                return false;
+              }
+              toast(`✔ ${s.name} — ${v.terrain.rooms.find((r) => r.id === s.roomId)?.name} (${STATION_KIND_LABEL[s.kind]})`, 'ok');
+              return true;
+            }}
+          />
+        </div>
+      </details>
       <fieldset disabled={!editable} style={{ border: 'none', padding: 0, margin: 0 }} class="stack">
         <div class="card stack">
           <h2>Informations générales</h2>

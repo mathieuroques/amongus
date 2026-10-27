@@ -200,6 +200,17 @@ function Lobby({ v, conn }: { v: PlayerView; conn: Conn }) {
       <a class="btn block" href="#/regles">
         📖 Lire les règles
       </a>
+      <details class="card">
+        <summary>📷 Tester mon appareil photo (lecture de QR code)</summary>
+        <div style={{ marginTop: '12px' }}>
+          <Scanner
+            onCode={async (raw) => {
+              toast(`QR code lu : ${raw.slice(-24)}. Votre téléphone est prêt !`, 'ok');
+              return true;
+            }}
+          />
+        </div>
+      </details>
       <ActButton class="block" confirm="Quitter le salon ?" run={async () => {
         const r = await conn.act({ type: 'leave' });
         if (r.ok) {
@@ -787,11 +798,34 @@ function RoleTab({ v, conn }: { v: PlayerView; conn: Conn }) {
           {!imp && !v.me.alive && <p class="card ghost">Fantôme d’équipage : terminez vos tâches. Vous ne pouvez plus voter, signaler ni réparer.</p>}
         </div>
       </Reveal>
+      <FacadeButton v={v} />
       <a class="btn block" href="#/regles">
         📖 Règles du jeu
       </a>
       <WakeLockToggle />
       <SafetyCard v={v} />
+    </>
+  );
+}
+
+/** Carte « Équipage » de façade, disponible pour TOUS : montrer son téléphone ne prouve donc rien. */
+function FacadeButton({ v }: { v: PlayerView }) {
+  const [on, setOn] = useState(false);
+  if (!v.me.alive) return null;
+  return (
+    <>
+      <button class="btn block" onClick={() => setOn(true)}>
+        🃏 Carte de façade « Équipage » (bluff)
+      </button>
+      {on && (
+        <div class="overlay" onClick={() => setOn(false)}>
+          <div class="wrap stack">
+            <div class="stack">
+              <RoleCard v={{ ...v, me: { ...v.me, role: 'crewmate' } }} />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -275,4 +275,6 @@ export interface GameState {
   reclaim: { playerId: string; codeHash: string; expiresAt: number }[];
   gmFailures: number[];
   seq: number;
+  /** Dernière modification (pour l'effacement automatique après inactivité). */
+  updatedAt?: number;
 }
