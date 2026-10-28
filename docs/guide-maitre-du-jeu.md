@@ -36,10 +36,12 @@ Prévoyez au moins 1,5 poste de tâches par tranche de 4 joueurs pour éviter le
 ## 4. Imprimer (bouton Imprimer)
 Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papier), fiches spéciales (bouton d’urgence, réacteur, oxygène, énergie, radio, moniteur), étiquettes des pièces et panneaux « zone interdite » / « passage », badges fantômes, aide-mémoire. « Imprimer » → imprimante ou « Enregistrer en PDF ». Les codes restent valables d’une partie à l’autre tant que vous ne les régénérez pas.
 
+> **Énigmes papier (mise à jour)** : la grille « inventaire » est inchangée (vos anciennes fiches restent utilisables, la nouvelle impression ajoute seulement les repères A–F / 1–8 et les traits des moitiés), mais les **bandes « puzzle » portent désormais deux lettres** (haut et bas) : **réimprimez et redécoupez** les fiches qui contiennent un puzzle (« Puzzle », « Énigme du coffre »).
+
 ## 4 bis. Tester (onglet 🧪 Tests)
 - **Faire sonner tous les téléphones** : chaque joueur doit entendre/voir l’alerte ; les autres règlent leurs alertes.
 - **Vérifier une fiche posée** : scannez un QR code dans la maison ; l’application indique le poste et ce qu’on peut y tester.
-- **Toutes les tâches** : chaque étape de chaque tâche se lance réellement (validée par le serveur, sans effet sur la partie). Pour les énigmes papier, la **réponse attendue** s’affiche : comparez avec la fiche imprimée. Chaque test réussi est coché ✅ ; l’onglet Partie indique « Tâches testées x/y ».
+- **Toutes les tâches** : chaque étape de chaque tâche se lance réellement (validée par le serveur, sans effet sur la partie). Pour les énigmes papier, la question est tirée au hasard (comme en partie) et la **réponse attendue** s’affiche : comparez avec la fiche imprimée (relancez le test pour voir d’autres questions). Chaque test réussi est coché ✅ ; l’onglet Partie indique « Tâches testées x/y ».
 - **Réparations** : énergie, radio, oxygène. Le réacteur se teste à deux, pendant une partie d’essai.
 
 ## 5. Inviter
@@ -58,10 +60,10 @@ Une **barre d’état** reste toujours visible en haut : phase et chrono, sabota
 - **ARRÊT D’URGENCE** (STOP) : écran rouge sur tous les téléphones (procédure dans `securite-urgence.md`).
 - **Faire sonner tous les téléphones** : utile pour rappeler tout le monde.
 - **Sabotage en cours** : état des postes, mains posées au réacteur, bouton « Annuler le sabotage ».
-- **Réunion** : étape en cours, arrivées, votes en direct (vous seul les voyez), boutons *Étape suivante*, *+30 s*, *−30 s*.
+- **Réunion** : étape en cours, arrivées, « prêts à voter », votes en direct (vous seul les voyez), boutons *Étape suivante*, *+30 s*, *−30 s*. Le rassemblement se raccourcit seul à 15 s dès que la majorité est arrivée, et le vote s’ouvre dès que la majorité est « prête à voter » : *+30 s* reste possible pour un retardataire.
 - **Convoquer une réunion** : pour un corps dont le téléphone ne fonctionne plus, ou un litige.
 - **Fin de partie manuelle** : victoire équipage, imposteurs, ou sans vainqueur (avertissement de confirmation).
-- **Alertes sécurité** : écran d’alerte, sonnerie, bandeau rouge (et notification si votre téléphone est verrouillé et les notifications activées) ; touchez « Vu » après avoir réagi.
+- **Alertes sécurité** et **contestations d’élimination** : écran d’alerte, sonnerie, bandeau rouge (et notification si votre téléphone est verrouillé et les notifications activées) ; touchez « Vu » après avoir réagi. La notification d’une contestation ne nomme pas l’imposteur (elle peut s’afficher sur l’écran verrouillé) : son nom est dans le bandeau du tableau de bord.
 
 ## 8. Joueurs (onglet Joueurs)
 Cartes filtrables (tous, vivants, morts, déconnectés) : statut (vivant, mort, éjecté, corps non trouvé), connexion 🟢/⚪, notifications 🔔, tâches. « Afficher les rôles » : ne cochez que si personne ne voit votre écran. **Gérer** un joueur :
@@ -70,7 +72,7 @@ Cartes filtrables (tous, vivants, morts, déconnectés) : statut (vivant, mort, 
 Chaque correction modifie l’équilibre de la partie : une confirmation est demandée et l’action est inscrite au journal.
 
 ## 9. Arbitrage
-- **Élimination contestée** : écoutez les deux joueurs séparément ; le journal (onglet Journal, « Afficher les événements secrets ») indique les codes armés, les éliminations et les codes erronés avec l’heure. Annulez si la règle n’a pas été respectée (escalier, pendant une réunion, à distance…).
+- **Élimination contestée** : la victime touche « Je n’ai pas été touché·e (contester) » ; vous recevez une alerte « CONTESTATION » avec le nom de l’imposteur. Écoutez les deux joueurs séparément ; le journal (onglet Journal, « Afficher les événements secrets ») indique l’heure de chaque élimination et de la contestation. Annulez (Joueurs → Gérer → « Annuler la mort ») si la règle n’a pas été respectée (pas de contact, escalier, à distance…). Une erreur de pseudonyme de l’imposteur se corrige de la même façon.
 - **Fantôme qui parle** : avertissement, puis exclusion.
 - **Codes erronés à répétition** (blocage automatique d’une minute, signalé dans le journal) : possible tentative de triche.
 - **Téléphone déchargé** : déclarez la mort si le joueur est éliminé, sinon donnez-lui un code de reconnexion sur un autre téléphone, ou « A quitté la partie ».

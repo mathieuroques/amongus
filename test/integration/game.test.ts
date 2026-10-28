@@ -1,6 +1,6 @@
 // Tests d'intégration client ↔ serveur : vrais WebSockets contre le Worker + Durable Object exécutés localement.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { assemblePuzzle, countPuzzle } from '../../src/shared/puzzles';
+import { assembleAnswer, countAnswer } from '../../src/shared/puzzles';
 import { BASE, createGame, Phone, sleep, startServer, stopServer } from './server';
 
 const N = 40;
@@ -10,11 +10,10 @@ const SETTINGS = {
   initialKillCooldownSec: 5,
   killCooldownSec: 10,
   emergencyCooldownSec: 0,
-  gatherSec: 15,
+  gatherSec: 60,
   discussionSec: 0,
   votingSec: 15,
   resultSec: 5,
-  killCodeTtlSec: 15,
   initialSabotageCooldownSec: 5,
   sabotageCooldownSec: 10,
   bodyTimeoutSec: 0,
@@ -41,10 +40,11 @@ function solve(ch: any, taskId?: string) {
       return ch.params.target;
     case 'pin':
       return ch.params.pin;
+    // énigmes papier : comme un joueur devant la fiche imprimée (la réponse n'est jamais envoyée au téléphone)
     case 'count':
-      return countPuzzle(def.seed).answer;
+      return countAnswer(def.seed, ch.params.sym, ch.params.scope);
     case 'assemble':
-      return assemblePuzzle(def.seed).answer;
+      return assembleAnswer(def.seed, ch.params.line);
     default:
       return 'done';
   }
@@ -172,12 +172,19 @@ describe('parcours complet multi-téléphones', () => {
     const total = gm.state.taskBar.total;
     await phones[5].waitState((s) => Math.abs(s.taskBar - 1 / total) < 1e-9);
     await gm.waitState((s) => s.taskBar.done === 1);
-    // un imposteur « fait » une tâche : aucune progression
+    // un imposteur « fait » une tâche : même réponse et même progression de SA liste, aucune progression de la barre
     const imp = phones.find((p) => role(p) === 'impostor')!;
-    const fr = await doStep(imp, imp.state.me.tasks[imp.state.me.tasks.length - 1].taskId);
-    expect(fr.data).toEqual({ fake: true });
+    const shortImp = imp.state.me.tasks.find((t: any) => t.type === 'short' && t.steps === 1);
+    const fr = await doStep(imp, shortImp.taskId);
+    expect(fr.data).toEqual({ taskDone: true });
+    await imp.waitState((s) => s.me.tasks.find((t: any) => t.taskId === shortImp.taskId).done);
     await sleep(200);
     expect(gm.state.taskBar.done).toBe(1);
+    // la prochaine étape conseillée tient compte de la dernière tâche faite
+    const after = a.state;
+    const next = after.me.tasks.find((t: any) => t.taskId === after.me.nextTaskId);
+    expect(next.done).toBe(false);
+    expect(Math.min(...after.me.tasks.filter((t: any) => !t.done).map((t: any) => t.near))).toBe(next.near);
   }, 30_000);
 
   it('24. modification frauduleuse depuis le navigateur : réponse fausse, trop rapide, défi d’autrui', async () => {
@@ -190,7 +197,8 @@ describe('parcours complet multi-téléphones', () => {
     expect((await a.act({ type: 'submit', challengeId: ch.data.id, answer: solve(ch.data, t.taskId) })).code).toBe('too_fast');
     expect((await b.act({ type: 'submit', challengeId: ch.data.id, answer: 'done' })).code).toBe('no_challenge');
     expect((await a.act({ type: 'vote', target: 'skip' })).code).toBe('not_voting');
-    expect((await a.act({ type: 'arm' })).code).toBe('forbidden');
+    expect((await a.act({ type: 'kill', target: b.playerId })).code).toBe('forbidden');
+    expect((await a.act({ type: 'arm' })).code).toBe('unknown'); // ancienne action supprimée : refusée proprement
     expect((await a.act({ type: 'sabotage', kind: 'reactor' })).code).toBe('forbidden');
     await a.act({ type: 'cancelChallenge' });
   });
@@ -231,20 +239,29 @@ describe('parcours complet multi-téléphones', () => {
     await crew[2].waitState((s) => !s.sabotage && s.me.tasks);
   }, 30_000);
 
-  it('minuteurs du serveur : un code d’élimination expire tout seul (alarme du Durable Object)', async () => {
-    const imp = phones.filter((p) => role(p) === 'impostor')[2];
-    const a = await imp.act({ type: 'arm' });
-    expect(a.ok, a.msg).toBe(true);
-    await imp.waitState((s) => s.me.killCode?.code === a.data.code);
-    // aucune action de personne : l'alarme doit retirer le code après 15 s
-    await imp.waitState((s) => !s.me.killCode, 20_000);
-  }, 30_000);
+  it('panne de courant : tâches possibles, signalement refusé, réparation', async () => {
+    const imps = phones.filter((p) => role(p) === 'impostor');
+    const crew = phones.filter((p) => role(p) === 'crewmate');
+    await sleep(10_200); // délai entre deux sabotages
+    const r = await imps[1].act({ type: 'sabotage', kind: 'lights' });
+    expect(r.ok, r.msg).toBe(true);
+    await crew[4].waitState((s) => s.sabotage?.kind === 'lights');
+    expect(crew[4].state.me.tasks).toBeDefined(); // la liste reste visible
+    const t = gmPlayer(crew[4].playerId!).tasks.find((x: any) => !x.done && x.steps === 1);
+    expect((await doStep(crew[4], t.taskId)).ok).toBe(true);
+    expect((await crew[4].act({ type: 'report', code: '1234' })).code).toBe('dark');
+    const fix = await crew[4].act({ type: 'fixStart', code: station('lights').code });
+    expect(fix.ok, fix.msg).toBe(true);
+    await sleep(fix.data.minMs + 50);
+    expect((await crew[4].act({ type: 'submit', challengeId: fix.data.id, answer: 'done' })).data).toEqual({ fixed: true });
+    await crew[5].waitState((s) => !s.sabotage);
+  }, 40_000);
 
   it('outils du MJ : test d’une tâche via le serveur, test d’alerte, abonnements push', async () => {
     const t = gm.state.terrain.tasks.find((x: any) => x.enabled && x.steps[0].game === 'count');
     const r = await gm.act({ type: 'testTask', taskId: t.id, stepIndex: 0 });
     expect(r.ok, r.msg).toBe(true);
-    expect(r.data.expected).toBe(countPuzzle(t.seed).answer);
+    expect(r.data.expected).toBe(countAnswer(t.seed, r.data.params.sym, r.data.params.scope));
     await sleep(r.data.minMs + 50);
     expect((await gm.act({ type: 'testSubmit', challengeId: r.data.id, answer: '999' })).code).toBe('wrong');
     expect((await gm.act({ type: 'testSubmit', challengeId: r.data.id, answer: r.data.expected })).ok).toBe(true);
@@ -269,26 +286,30 @@ describe('parcours complet multi-téléphones', () => {
     expect((await phones[5].act({ type: 'cancelChallenge' })).ok).toBe(true);
   }, 30_000);
 
-  it('12-13. délai d’élimination respecté, pas de double élimination', async () => {
+  it('12-13. élimination par choix du pseudonyme : la victime n’a rien à saisir, délai respecté, contestation', async () => {
     const imps = phones.filter((p) => role(p) === 'impostor');
     const crew = phones.filter((p) => role(p) === 'crewmate');
     const k = imps[0];
-    const a1 = await k.act({ type: 'arm' });
-    expect(a1.ok, a1.msg).toBe(true);
     const victim = crew[10];
-    const r = await victim.act({ type: 'killed', code: a1.data.code });
+    expect((await k.act({ type: 'kill', target: imps[1].playerId })).code).toBe('ally');
+    const r = await k.act({ type: 'kill', target: victim.playerId });
     expect(r.ok, r.msg).toBe(true);
-    await victim.waitState((s) => s.me.alive === false && s.me.bodyPending);
-    // le même code ne tue pas une deuxième personne
-    expect((await crew[11].act({ type: 'killed', code: a1.data.code })).code).toBe('bad_code');
+    // le téléphone de la victime passe tout seul en écran « corps »
+    await victim.waitState((s) => s.me.alive === false && s.me.bodyPending && /^\d{4}$/.test(s.me.body.code));
     // délai entre deux éliminations
-    expect((await k.act({ type: 'arm' })).code).toBe('cooldown');
+    expect((await k.act({ type: 'kill', target: crew[11].playerId })).code).toBe('cooldown');
     // un mort ne peut pas être « re-tué »
-    const a2 = await imps[1].act({ type: 'arm' });
-    expect((await victim.act({ type: 'killed', code: a2.data.code })).code).toBe('dead');
-    await imps[1].act({ type: 'disarm' });
+    expect((await imps[1].act({ type: 'kill', target: victim.playerId })).code).toBe('bad_target');
+    // un équipier ne peut pas éliminer
+    expect((await crew[11].act({ type: 'kill', target: crew[12].playerId })).code).toBe('forbidden');
     // les autres ignorent encore la mort
     expect(crew[12].state.players.find((x: any) => x.id === victim.playerId).status).toBe('alive');
+    // la victime conteste : le MJ est prévenu (et lui seul)
+    expect((await victim.act({ type: 'dispute' })).ok).toBe(true);
+    const g = await gm.waitState((s) => s.alerts.some((a: any) => a.kind === 'dispute' && a.playerId === victim.playerId));
+    expect(g.alerts.find((a: any) => a.kind === 'dispute').message).toContain(k.state.me.name);
+    expect(JSON.stringify(crew[12].state)).not.toContain('Conteste');
+    await gm.act({ type: 'ackAlert', id: g.alerts.find((a: any) => a.kind === 'dispute').id });
   });
 
   it('14-18. signalement, réunion, actions bloquées, vote secret, double vote refusé, résultat', async () => {
@@ -303,12 +324,17 @@ describe('parcours complet multi-téléphones', () => {
     expect(crew[12].state.meeting.bodyOfName).toBe(victim.state.me.name);
     // actions interdites pendant la réunion
     await sleep(5_000);
-    expect((await imps[2].act({ type: 'arm' })).code).toBe('meeting');
+    expect((await imps[2].act({ type: 'kill', target: crew[1].playerId })).code).toBe('meeting');
     expect((await crew[1].act({ type: 'scan', code: station('task').code })).code).toBe('meeting');
-    // rassemblement : tous les vivants pointent → vote (discussion = 0)
+    // rassemblement : la majorité pointe → l'alarme du serveur ouvre la suite 15 s plus tard (au lieu de 60 s)
     const alive = phones.filter((p) => p.state.me.alive);
-    await Promise.all(alive.map((p) => p.act({ type: 'checkIn' })));
-    await gm.waitState((s) => s.meeting?.stage === 'voting');
+    const majority = Math.floor(alive.length / 2) + 1;
+    const t0 = Date.now();
+    await Promise.all(alive.slice(0, majority).map((p) => p.act({ type: 'checkIn' })));
+    const g = await gm.waitState((s) => s.meeting?.stage === 'gather' && s.meeting.checkedInCount === majority);
+    expect(g.meeting.stageEndsAt - g.now).toBeLessThanOrEqual(15_000);
+    await gm.waitState((s) => s.meeting?.stage === 'voting', 20_000); // discussion = 0 → vote
+    expect(Date.now() - t0).toBeLessThan(25_000);
     expect((await victim.act({ type: 'vote', target: 'skip' })).code).toBe('dead');
     // tout le monde vote contre un imposteur, sauf les imposteurs (passer)
     const target = imps[5];
@@ -366,7 +392,7 @@ describe('parcours complet multi-téléphones', () => {
     expect(back.state.me.tasks.map((t: any) => t.done)).toEqual(p.state.me.tasks.map((t: any) => t.done));
     phones[phones.indexOf(p)] = back;
     // une vieille page d'un joueur mort ne peut pas agir comme un vivant
-    expect((await reloaded.act({ type: 'killed', code: '0000' })).code).toBe('dead');
+    expect((await reloaded.act({ type: 'report', code: '0000' })).code).toBe('dead');
   });
 
   it('20. victoire des imposteurs par parité, puis 27. nouvelle partie propre', async () => {

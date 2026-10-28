@@ -5,7 +5,7 @@
 - [ ] Partie créée, **code maître du jeu noté** sur papier.
 - [ ] Pièces, postes, tâches et consignes de sécurité saisis et **enregistrés**.
 - [ ] Terrain **exporté** (fichier de sauvegarde).
-- [ ] Fiches, étiquettes, panneaux, badges et affiche d’invitation imprimés.
+- [ ] Fiches, étiquettes, panneaux, badges et affiche d’invitation imprimés (fiches « puzzle » imprimées avec la version actuelle : bandes à deux lettres, haut et bas).
 - [ ] Message aux invités : charger leur téléphone, venir avec un navigateur à jour, partager le Wi-Fi.
 
 ## Le jour J, avant l’arrivée des joueurs

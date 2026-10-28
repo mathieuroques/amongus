@@ -16,12 +16,14 @@ Le MJ peut les renommer, les désactiver, en créer d’autres et choisir pour c
 | Calibrage | courte | arrêter un curseur 3 fois dans la zone verte |
 | Nettoyage des filtres | courte | toucher 8 cibles |
 | Scan médical | courte, **visuelle** | rester 10 s sur la marque au sol (grand écran vert visible de loin) |
-| Inventaire | courte, papier | compter un symbole sur la grille imprimée de la fiche |
-| Puzzle | courte, papier | ranger des bandes découpées (1 point, 2 points…) et lire le mot |
+| Inventaire | courte, papier | compter un symbole sur la grille imprimée de la fiche ; **la question change à chaque fois** (6 symboles × toute la grille ou une moitié = 30 questions) |
+| Puzzle | courte, papier | ranger des bandes découpées (1 point, 2 points…) et lire le mot du **haut** ou du **bas** (tiré au hasard : deux mots par jeu de bandes) |
 | Câblage secondaire | courte | relier les fils |
 | Alignement de l’antenne | courte | aligner un curseur |
 
-Chaque mini-jeu impose une durée minimale (2 à 10 s) avant validation, et le serveur vérifie la réponse (les réponses des énigmes papier ne sont jamais envoyées aux téléphones).
+Chaque mini-jeu impose une durée minimale (2 à 10 s) avant validation, et le serveur vérifie la réponse (les réponses des énigmes papier ne sont jamais envoyées aux téléphones : seule la question part). Retenir une réponse d’une partie à l’autre ne sert donc à rien : il faut la fiche sous les yeux.
+
+S’il n’y a qu’une tâche du joueur à un poste, le mini-jeu s’ouvre dès la lecture du QR code. Les tâches simulées des imposteurs avancent exactement comme celles de l’équipage (mêmes messages, même liste), sans compter dans la barre.
 
 ## Mini-jeux de réparation
 | Sabotage | Poste | Mini-jeu |
@@ -33,7 +35,7 @@ Chaque mini-jeu impose une durée minimale (2 à 10 s) avant validation, et le s
 
 ## Supports générés par l’application (bouton « Imprimer » du MJ)
 - **Affiche d’invitation** : QR code du lien d’invitation + code de partie (valable pour toutes les « nouvelles parties » de la même session).
-- **Fiches de postes de tâches** : nom, pièce, QR code, code court, liste des tâches réalisables, énigmes papier (grille de symboles ; bandes de lettres à découper).
+- **Fiches de postes de tâches** : nom, pièce, QR code, code court, liste des tâches réalisables, énigmes papier (grille de symboles repérée A–F / 1–8, moitiés marquées d’un trait épais ; bandes à découper portant une lettre en haut et une lettre blanche sur fond noir en bas).
 - **Fiches spéciales** : bouton d’urgence, réacteur A/B, oxygène A/B, énergie (fictif), radio, moniteur de vie — avec la consigne de réparation.
 - **Étiquettes de pièces**, panneaux **ZONE INTERDITE** et **zone de passage**.
 - **Badges fantômes** (12 par page).

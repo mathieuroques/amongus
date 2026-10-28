@@ -31,4 +31,6 @@ Fonctionnement technique : notifications *Web Push* standard (RFC 8030), signée
 4. Volume au maximum, mode silencieux et « Ne pas déranger » désactivés pour la soirée.
 5. Le téléphone se porte **en main ou en poche, écran allumé** si possible, mais on ne le regarde jamais en marchant dans un escalier : l’écran d’alerte et le son suffisent pour savoir qu’il faut aller en réunion.
 6. Prévoir quelques **batteries externes** : l’écran allumé consomme beaucoup.
-7. Pendant une réunion, le compte à rebours de rassemblement laisse le temps d’arriver à ceux qui n’ont rien entendu ; le MJ peut le prolonger (+30 s).
+7. Pendant une réunion, le compte à rebours de rassemblement laisse le temps d’arriver à ceux qui n’ont rien entendu ; une fois la majorité arrivée, il ne reste que 15 s : le MJ peut le prolonger (+30 s) s’il voit qu’un joueur arrive.
+8. **Téléphone sorti de veille** : une action faite pendant la reconnexion n’est pas perdue ; un bandeau jaune « Reconnexion… » s’affiche et l’action part dès le retour de la connexion (jusqu’à 5 s). Au-delà, elle est refusée avec un message clair et n’est jamais envoyée plus tard : réessayez.
+9. **Vibrations discrètes** (Android) : la victime d’une élimination sent son téléphone vibrer (aucun son, pour ne pas alerter les témoins) ; un imposteur sent une courte vibration quand il peut de nouveau éliminer ou saboter.

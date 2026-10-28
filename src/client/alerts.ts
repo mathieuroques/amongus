@@ -96,16 +96,19 @@ const VIB = {
   stop: [800, 200, 800],
   ping: [200, 100, 200],
   start: [300],
+  killed: [400, 120, 400],
 };
 
 /** Déclenche les alertes lors des changements importants de l'état reçu du serveur. */
 export function usePlayerAlerts(v?: PlayerView) {
-  const prev = useRef<{ phase?: string; sab?: string; meetingId?: number; stop?: boolean; ping?: number }>();
+  const prev = useRef<{ phase?: string; sab?: string; meetingId?: number; stop?: boolean; ping?: number; body?: boolean }>();
   useEffect(() => {
     if (!v) return;
     const p = prev.current;
-    prev.current = { phase: v.phase, sab: v.sabotage?.kind, meetingId: v.meeting?.id, stop: v.emergencyStop, ping: v.pingId };
+    prev.current = { phase: v.phase, sab: v.sabotage?.kind, meetingId: v.meeting?.id, stop: v.emergencyStop, ping: v.pingId, body: v.me.bodyPending };
     if (!p) return; // premier état reçu (chargement de la page) : pas d'alerte rétroactive
+    // éliminé·e à l'instant : vibration seulement (un son attirerait l'attention des témoins)
+    if (v.me.bodyPending && !p.body) buzz(VIB.killed);
     const room = v.terrain.rooms.find((r) => r.id === v.terrain.meetingRoomId)?.name ?? 'la salle de réunion';
     if (v.emergencyStop && !p.stop) return raiseAlert('stop', 'STOP', 'Arrêt d’urgence : arrêtez-vous et écoutez le maître du jeu.', 'stop', VIB.stop);
     if (v.phase === 'meeting' && v.meeting && v.meeting.id !== p.meetingId) {
@@ -147,7 +150,7 @@ export function useGmAlerts(v?: GmView) {
     const max = Math.max(0, ...v.alerts.map((a) => a.id));
     if (last.current !== undefined && max > last.current) {
       const a = v.alerts.find((x) => x.id === max)!;
-      raiseAlert('safety', 'ALERTE SÉCURITÉ', `${a.playerName} : ${a.message}`, 'stop', VIB.stop);
+      raiseAlert('safety', a.kind === 'dispute' ? 'CONTESTATION' : 'ALERTE SÉCURITÉ', `${a.playerName} : ${a.message}`, 'stop', VIB.stop);
     }
     last.current = max;
   }, [v?.alerts]);

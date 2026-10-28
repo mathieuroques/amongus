@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addPlayer, createGame, GameError, gmAction, nextWakeup, playerAction, tallyVotes, taskProgress, tick, type PlayerAction,
+  addPlayer, createGame, GameError, gmAction, nextWakeup, personalOrder, playerAction, tallyVotes, taskProgress, tick, type PlayerAction,
 } from '../src/shared/engine';
 import { assemblePuzzle, countPuzzle } from '../src/shared/puzzles';
 import { seededRng } from '../src/shared/rng';
@@ -53,8 +53,7 @@ function finishAllTasks(s: GameState, p: PlayerState) {
 
 function kill(s: GameState, imp: PlayerState, victim: PlayerState) {
   if (clock < imp.killCooldownUntil) advance(imp.killCooldownUntil - clock);
-  const { code } = act(s, imp, { type: 'arm' }) as { code: string };
-  return act(s, victim, { type: 'killed', code });
+  return act(s, imp, { type: 'kill', target: victim.id });
 }
 
 function runMeetingToVoting(s: GameState) {
@@ -116,25 +115,78 @@ describe('rôles et confidentialité', () => {
     expect(v.terrain.passages).toBeUndefined();
   });
 
-  it('un imposteur voit ses alliés mais pas le code d’élimination des autres', () => {
+  it('un imposteur voit ses alliés et leurs délais restent secrets pour l’équipage', () => {
     const s = setup(10, 2);
     const [a, b] = imps(s);
-    kill(s, b, crew(s)[0]); // b a un délai ; on arme ensuite a
-    advance(120_000);
-    act(s, a, { type: 'arm' });
     const vb = viewForPlayer(s, b.id, clock);
     expect(vb.allies!.map((x) => x.id)).toEqual([a.id]);
-    expect(JSON.stringify(vb)).not.toContain(a.killCode!.code);
     expect(vb.terrain.passages).toBeDefined();
+    expect(vb.me.killCooldownUntil).toBe(b.killCooldownUntil);
+    const vc = viewForPlayer(s, crew(s)[0].id, clock);
+    expect(vc.me.killCooldownUntil).toBeUndefined();
+    expect(vc.sabotageCooldownUntil).toBeUndefined();
+    expect(vc.sabotageOptions).toBeUndefined();
   });
 
-  it('les tâches diffèrent selon les joueurs mais la tâche commune est partagée', () => {
+  it('les tâches diffèrent selon les joueurs ; la tâche commune est partagée mais jamais en premier', () => {
     const s = setup(10, 2);
     const lists = crew(s).map((p) => p.tasks.map((t) => t.taskId));
     expect(new Set(lists.map((l) => l.join())).size).toBeGreaterThan(1);
-    const common = lists[0][0];
-    for (const l of lists) expect(l[0]).toBe(common);
-    for (const l of lists) expect(l).toHaveLength(4);
+    const common = s.terrain.tasks.filter((t) => t.type === 'common').map((t) => t.id);
+    const shared = lists[0].find((id) => common.includes(id))!;
+    for (const l of lists) {
+      expect(l).toHaveLength(4);
+      expect(l).toContain(shared);
+      expect(common).not.toContain(l[0]); // personne n'est envoyé d'abord au poste de la tâche commune
+    }
+  });
+
+  it('ordre personnel : sur 40 joueurs, les premières étapes sont réparties sur plusieurs postes', () => {
+    const s = setup(40, 6);
+    const firstStations = s.players.map((p) => {
+      const v = viewForPlayer(s, p.id, clock);
+      const t = v.me.tasks!.find((x) => x.taskId === v.me.nextTaskId)!;
+      return t.next!.stationName;
+    });
+    const counts = new Map<string, number>();
+    for (const st of firstStations) counts.set(st, (counts.get(st) ?? 0) + 1);
+    expect(counts.size).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...counts.values())).toBeLessThan(20); // avant : les 40 au même poste
+    for (const p of s.players) expect(s.terrain.tasks.find((t) => t.id === p.tasks[0].taskId)!.type).not.toBe('common');
+  });
+
+  it('personalOrder : la tâche commune n’est jamais en tête, même tirée en premier', () => {
+    for (let k = 0; k < 300; k++) {
+      const r = seededRng(k);
+      const out = personalOrder([{ type: 'common', id: 'c' }, { type: 'short', id: 'a' }, { type: 'long', id: 'b' }], r);
+      expect(out[0].type).not.toBe('common');
+      expect(out.map((x) => x.id).sort()).toEqual(['a', 'b', 'c']);
+    }
+    // seulement des tâches communes : rien à échanger
+    expect(personalOrder([{ type: 'common' }], seededRng(1))[0].type).toBe('common');
+  });
+
+  it('prochaine étape conseillée : même pièce, puis même étage que la dernière tâche faite', () => {
+    const s = setup(10, 2, { commonTasks: 0, longTasks: 0, shortTasks: 4 });
+    const c = crew(s)[0];
+    const v0 = viewForPlayer(s, c.id, clock);
+    expect(v0.me.nextTaskId).toBe(c.tasks[0].taskId); // au départ : l'ordre personnel
+    expect(v0.me.tasks!.every((t) => t.near === undefined)).toBe(true);
+    doStep(s, c, c.tasks[0].taskId);
+    const v = viewForPlayer(s, c.id, clock);
+    const lastSt = s.terrain.stations.find((x) => x.id === c.lastStationId)!;
+    const lastRoom = s.terrain.rooms.find((r) => r.id === lastSt.roomId)!;
+    const todo = v.me.tasks!.filter((t) => !t.done);
+    for (const t of todo) {
+      const st = s.terrain.stations.find((x) => x.name === t.next!.stationName)!;
+      const room = s.terrain.rooms.find((r) => r.id === st.roomId)!;
+      expect(t.near).toBe(room.id === lastRoom.id ? 0 : room.floor === lastRoom.floor ? 1 : 2);
+    }
+    const best = Math.min(...todo.map((t) => t.near!));
+    const next = todo.find((t) => t.taskId === v.me.nextTaskId)!;
+    expect(next.near).toBe(best);
+    // à égalité, l'ordre personnel départage
+    expect(todo.filter((t) => t.near === best)[0].taskId).toBe(next.taskId);
   });
 });
 
@@ -182,12 +234,28 @@ describe('tâches', () => {
     expect(taskProgress(s).done).toBe(1);
   });
 
-  it('les tâches d’un imposteur sont simulées et ne font pas progresser la barre', () => {
-    const s = setup(10, 2);
+  it('tâches simulées : même progression et même réponse qu’un équipier, sans faire avancer la barre', () => {
+    const s = setup(10, 2, { commonTasks: 1, longTasks: 1, shortTasks: 2 });
     const i = imps(s)[0];
-    const r = doStep(s, i, i.tasks[0].taskId);
-    expect(r).toEqual({ fake: true });
-    expect(taskProgress(s).done).toBe(0);
+    const c = crew(s)[0];
+    const long = (p: PlayerState) => p.tasks.find((t) => s.terrain.tasks.find((d) => d.id === t.taskId)!.type === 'long')!;
+    // étape 1 d'une tâche longue : réponses identiques
+    expect(doStep(s, i, long(i).taskId)).toEqual(doStep(s, c, long(c).taskId));
+    expect(doStep(s, i, long(i).taskId)).toEqual({ taskDone: true });
+    expect(doStep(s, c, long(c).taskId)).toEqual({ taskDone: true });
+    expect(taskProgress(s).done).toBe(1); // seule la tâche de l'équipier compte
+    expect(long(i).done).toBe(true);
+    // la liste de l'imposteur avance comme celle d'un équipier (compteur, prochaine étape)
+    const vi = viewForPlayer(s, i.id, clock);
+    const vc = viewForPlayer(s, c.id, clock);
+    expect(vi.me.tasks!.filter((t) => t.done)).toHaveLength(1);
+    expect(vc.me.tasks!.filter((t) => t.done)).toHaveLength(1);
+    expect(vi.me.nextTaskId).not.toBe(long(i).taskId);
+    // un imposteur qui « termine » tout ne fait jamais gagner l'équipage
+    finishAllTasks(s, i);
+    expect(s.phase).toBe('playing');
+    expect(i.tasks.every((t) => t.done)).toBe(true);
+    expect(s.log.some((l) => l.secret && /a simulé/.test(l.msg))).toBe(true);
   });
 
   it('les codes erronés répétés bloquent temporairement le joueur', () => {
@@ -197,80 +265,130 @@ describe('tâches', () => {
     expect(err(() => act(s, c, { type: 'scan', code: stationOf(s, 'task').code }))).toBe('blocked');
   });
 
-  it('les énigmes papier ont une réponse stable dérivée de la graine imprimée', () => {
-    expect(countPuzzle(123).answer).toBe(countPuzzle(123).answer);
-    expect(assemblePuzzle(9).word).toBe(assemblePuzzle(9).word);
-    const p = countPuzzle(5);
-    expect(p.grid.length).toBe(48);
+  it('les énigmes papier sont stables (même fiche imprimée) mais la question change d’une fois sur l’autre', () => {
+    expect(countPuzzle(123).grid).toEqual(countPuzzle(123).grid);
+    expect(assemblePuzzle(9)).toEqual(assemblePuzzle(9));
+    expect(countPuzzle(5).grid.length).toBe(48);
+    const s = setup(10, 2);
+    const t = s.terrain.tasks.find((x) => x.steps.some((st) => st.game === 'count'))!;
+    const st = s.terrain.stations.find((x) => x.id === t.steps.find((y) => y.game === 'count')!.stationId)!;
+    const questions = new Set<string>();
+    for (let k = 0; k < 40; k++) {
+      gmAction(s, { type: 'testTask', taskId: t.id, stepIndex: t.steps.findIndex((y) => y.game === 'count') }, ctx());
+      questions.add(String(s.gmChallenge!.params.question));
+      expect(s.gmChallenge!.stationId).toBe(st.id);
+    }
+    expect(questions.size).toBeGreaterThan(8);
   });
 });
 
 describe('éliminations', () => {
-  it('respecte le délai initial puis le délai entre deux éliminations', () => {
+  it('l’imposteur choisit sa victime : délai initial puis délai entre deux éliminations', () => {
     const s = setup(10, 2, { initialKillCooldownSec: 30, killCooldownSec: 60 });
     const i = imps(s)[0];
-    expect(err(() => act(s, i, { type: 'arm' }))).toBe('cooldown');
+    const [v, w, x] = crew(s);
+    expect(err(() => act(s, i, { type: 'kill', target: v.id }))).toBe('cooldown');
     advance(30_000);
-    const { code } = act(s, i, { type: 'arm' }) as { code: string };
-    const v = crew(s)[0];
-    act(s, v, { type: 'killed', code });
+    expect(act(s, i, { type: 'kill', target: v.id })).toEqual({ ok: true, name: v.name });
     expect(v.alive).toBe(false);
     expect(v.killedBy).toBe(i.id);
-    expect(err(() => act(s, i, { type: 'arm' }))).toBe('cooldown');
+    expect(v.body!.code).toMatch(/^\d{4}$/);
+    expect(i.kills).toBe(1);
+    expect(err(() => act(s, i, { type: 'kill', target: w.id }))).toBe('cooldown');
     advance(59_000);
-    expect(err(() => act(s, i, { type: 'arm' }))).toBe('cooldown');
+    expect(err(() => act(s, i, { type: 'kill', target: w.id }))).toBe('cooldown');
     advance(1_000);
-    expect(act(s, i, { type: 'arm' })).toHaveProperty('code');
+    act(s, i, { type: 'kill', target: w.id });
+    expect(w.alive).toBe(false);
+    expect(x.alive).toBe(true);
   });
 
-  it('un code ne sert qu’une fois et un mort ne peut pas être tué', () => {
-    const s = setup(10, 2);
-    const i = imps(s)[0];
-    advance(60_000);
-    const { code } = act(s, i, { type: 'arm' }) as { code: string };
-    const [v1, v2] = crew(s);
-    act(s, v1, { type: 'killed', code });
-    expect(err(() => act(s, v2, { type: 'killed', code }))).toBe('bad_code');
-    expect(err(() => act(s, v1, { type: 'killed', code }))).toBe('dead');
-    expect(v2.alive).toBe(true);
-  });
-
-  it('le code d’élimination expire', () => {
-    const s = setup(10, 2, { killCodeTtlSec: 30 });
-    const i = imps(s)[0];
-    advance(60_000);
-    const { code } = act(s, i, { type: 'arm' }) as { code: string };
-    advance(31_000);
-    tick(s, clock);
-    expect(err(() => act(s, crew(s)[0], { type: 'killed', code }))).toBe('bad_code');
-  });
-
-  it('un imposteur ne peut pas être éliminé et le message ne révèle rien', () => {
+  it('cible invalide : un allié, soi-même, un mort, un inconnu, un joueur parti', () => {
     const s = setup(10, 2);
     const [a, b] = imps(s);
+    const [v, w] = crew(s);
     advance(60_000);
-    const { code } = act(s, a, { type: 'arm' }) as { code: string };
-    let msg = '';
-    try {
-      act(s, b, { type: 'killed', code });
-    } catch (e) {
-      msg = (e as Error).message;
-    }
-    let msg2 = '';
-    try {
-      act(s, crew(s)[0], { type: 'killed', code: '0000' === code ? '1111' : '0000' });
-    } catch (e) {
-      msg2 = (e as Error).message;
-    }
-    expect(msg).toBe(msg2);
-    expect(b.alive).toBe(true);
+    expect(err(() => act(s, a, { type: 'kill', target: b.id }))).toBe('ally');
+    expect(err(() => act(s, a, { type: 'kill', target: a.id }))).toBe('bad_target');
+    expect(err(() => act(s, a, { type: 'kill', target: 'inconnu' }))).toBe('bad_target');
+    expect(err(() => act(s, a, { type: 'kill', target: undefined as never }))).toBe('bad_target');
+    kill(s, b, v);
+    expect(err(() => act(s, a, { type: 'kill', target: v.id }))).toBe('bad_target');
+    act(s, w, { type: 'leave' });
+    expect(err(() => act(s, a, { type: 'kill', target: w.id }))).toBe('bad_target');
+    // aucun refus ne consomme le délai
+    expect(a.killCooldownUntil).toBeLessThanOrEqual(clock);
+    expect(b.alive && a.alive).toBe(true);
   });
 
-  it('un membre d’équipage ne peut ni armer ni saboter', () => {
+  it('un membre d’équipage ne peut ni éliminer ni saboter ; un imposteur fantôme ne peut plus éliminer', () => {
     const s = setup(10, 2);
     advance(60_000);
-    expect(err(() => act(s, crew(s)[0], { type: 'arm' }))).toBe('forbidden');
+    expect(err(() => act(s, crew(s)[0], { type: 'kill', target: crew(s)[1].id }))).toBe('forbidden');
     expect(err(() => act(s, crew(s)[0], { type: 'sabotage', kind: 'lights' }))).toBe('forbidden');
+    const i = imps(s)[0];
+    gmAction(s, { type: 'kill', playerId: i.id }, ctx());
+    expect(err(() => act(s, i, { type: 'kill', target: crew(s)[1].id }))).toBe('dead');
+  });
+
+  it('la victime n’a rien à saisir ; son écran devient un corps, les autres ne savent rien', () => {
+    const s = setup(10, 2);
+    const i = imps(s)[0];
+    const [v, other] = crew(s);
+    v.challenge = undefined;
+    kill(s, i, v);
+    const vv = viewForPlayer(s, v.id, clock);
+    expect(vv.me.bodyPending).toBe(true);
+    expect(vv.me.deathRevealed).toBe(false);
+    expect(vv.me.body!.code).toBe(v.body!.code);
+    const vo = viewForPlayer(s, other.id, clock);
+    expect(vo.players.find((p) => p.id === v.id)!.status).toBe('alive');
+    // le tueur, lui, sait que sa victime est morte ; son allié non (jusqu'à la réunion)
+    expect(viewForPlayer(s, i.id, clock).players.find((p) => p.id === v.id)!.status).toBe('dead');
+    expect(viewForPlayer(s, imps(s)[1].id, clock).players.find((p) => p.id === v.id)!.status).toBe('alive');
+    expect(JSON.stringify(vo)).not.toContain(v.body!.code);
+  });
+
+  it('élimination d’un joueur en plein mini-jeu ou qui tient le réacteur : tout est annulé proprement', () => {
+    const s = setup(10, 2, { reactorSec: 60 });
+    const [i, j] = imps(s);
+    const [v, w] = crew(s);
+    advance(60_000);
+    const t = v.tasks[0];
+    const def = s.terrain.tasks.find((d) => d.id === t.taskId)!;
+    act(s, v, { type: 'startTask', code: s.terrain.stations.find((x) => x.id === def.steps[0].stationId)!.code, taskId: t.taskId });
+    expect(v.challenge).toBeDefined();
+    act(s, j, { type: 'sabotage', kind: 'reactor' });
+    const [ra] = s.terrain.stations.filter((x) => x.kind === 'reactor');
+    act(s, w, { type: 'hold', code: ra.code, on: true });
+    kill(s, i, v);
+    kill(s, j, w);
+    expect(v.challenge).toBeUndefined();
+    expect(s.sabotage!.holds).toHaveLength(0);
+  });
+
+  it('contestation : une seule par mort, seulement pour une élimination, le MJ reçoit le nom du tueur', () => {
+    const s = setup(10, 2);
+    const i = imps(s)[0];
+    const [v, w] = crew(s);
+    expect(err(() => act(s, v, { type: 'dispute' }))).toBe('not_killed');
+    kill(s, i, v);
+    expect(act(s, v, { type: 'dispute' })).toEqual({ ok: true });
+    expect(err(() => act(s, v, { type: 'dispute' }))).toBe('already');
+    const al = s.alerts.at(-1)!;
+    expect(al.kind).toBe('dispute');
+    expect(al.playerId).toBe(v.id);
+    expect(al.message).toContain(i.name);
+    // les joueurs ne reçoivent jamais les alertes (le nom du tueur reste secret)
+    expect(JSON.stringify(viewForPlayer(s, w.id, clock))).not.toContain(al.message);
+    expect(viewForGm(s, clock, new Set()).alerts.at(-1)!.kind).toBe('dispute');
+    expect(viewForPlayer(s, v.id, clock).me.disputed).toBe(true);
+    gmAction(s, { type: 'kill', playerId: w.id }, ctx());
+    expect(err(() => act(s, w, { type: 'dispute' }))).toBe('not_killed'); // mort déclarée par le MJ
+    // le MJ annule l'élimination : la contestation est remise à zéro
+    gmAction(s, { type: 'revive', playerId: v.id }, ctx());
+    expect(v.alive).toBe(true);
+    expect(v.disputed).toBeUndefined();
   });
 });
 
@@ -289,7 +407,7 @@ describe('corps et réunions', () => {
     expect(viewForPlayer(s, other.id, clock).players.find((p) => p.id === v.id)!.status).toBe('dead');
     // pendant la réunion : pas de tâche, pas d'élimination, pas de sabotage
     advance(120_000);
-    expect(err(() => act(s, i, { type: 'arm' }))).toBe('meeting');
+    expect(err(() => act(s, i, { type: 'kill', target: other.id }))).toBe('meeting');
     expect(err(() => act(s, i, { type: 'sabotage', kind: 'lights' }))).toBe('meeting');
     expect(err(() => act(s, other, { type: 'scan', code: stationOf(s, 'task').code }))).toBe('meeting');
   });
@@ -409,6 +527,109 @@ describe('corps et réunions', () => {
     expect(err(() => act(s, r, { type: 'report', code: v2.body!.code }))).toBe('bad_code');
   });
 
+  it('rassemblement : dès que la majorité est arrivée, il ne reste que 15 s aux retardataires', () => {
+    const s = setup(10, 2, { gatherSec: 90, discussionSec: 60 });
+    gmAction(s, { type: 'meeting' }, ctx());
+    const m = s.meeting!;
+    const end0 = m.stageEndsAt;
+    expect(end0).toBe(clock + 90_000);
+    const alive = s.players.filter((p) => p.alive);
+    for (const p of alive.slice(0, 5)) act(s, p, { type: 'checkIn' }); // 5/10 : pas encore la majorité
+    expect(m.stageEndsAt).toBe(end0);
+    advance(10_000);
+    act(s, alive[5], { type: 'checkIn' }); // 6/10 : majorité
+    expect(m.stageEndsAt).toBe(clock + 15_000);
+    advance(5_000);
+    act(s, alive[6], { type: 'checkIn' }); // on ne rallonge jamais
+    expect(m.stageEndsAt).toBe(clock + 10_000);
+    advance(10_000);
+    tick(s, clock);
+    expect(s.meeting!.stage).toBe('discussion');
+  });
+
+  it('rassemblement : une prolongation du MJ après la majorité n’est pas annulée par les arrivées suivantes', () => {
+    const s = setup(10, 2, { gatherSec: 90 });
+    gmAction(s, { type: 'meeting' }, ctx());
+    const alive = s.players.filter((p) => p.alive);
+    for (const p of alive.slice(0, 6)) act(s, p, { type: 'checkIn' });
+    expect(s.meeting!.stageEndsAt).toBe(clock + 15_000);
+    gmAction(s, { type: 'extend', seconds: 30 }, ctx());
+    expect(s.meeting!.stageEndsAt).toBe(clock + 45_000);
+    advance(5_000);
+    act(s, alive[6], { type: 'checkIn' });
+    expect(s.meeting!.stageEndsAt).toBe(clock + 40_000);
+  });
+
+  it('rassemblement : la règle des 15 s ne rallonge jamais un minuteur plus court', () => {
+    const s = setup(10, 2, { gatherSec: 15 });
+    gmAction(s, { type: 'meeting' }, ctx());
+    const end0 = s.meeting!.stageEndsAt;
+    advance(8_000);
+    for (const p of s.players.slice(0, 6)) act(s, p, { type: 'checkIn' });
+    expect(s.meeting!.stageEndsAt).toBe(end0);
+  });
+
+  it('discussion : le vote s’ouvre dès que la majorité des vivants est « prête à voter »', () => {
+    const s = setup(10, 2, { discussionSec: 120 });
+    const [v] = crew(s);
+    kill(s, imps(s)[0], v);
+    gmAction(s, { type: 'meeting' }, ctx());
+    for (const p of s.players.filter((x) => x.alive)) act(s, p, { type: 'checkIn' });
+    expect(s.meeting!.stage).toBe('discussion');
+    const alive = s.players.filter((p) => p.alive); // 9 vivants : il faut 5 prêts
+    expect(err(() => act(s, v, { type: 'readyVote' }))).toBe('dead');
+    for (const p of alive.slice(0, 4)) act(s, p, { type: 'readyVote' });
+    act(s, alive[0], { type: 'readyVote' }); // deux fois : compté une fois
+    expect(s.meeting!.stage).toBe('discussion');
+    const view = viewForPlayer(s, alive[0].id, clock).meeting!;
+    expect(view.readyCount).toBe(4);
+    expect(view.myReady).toBe(true);
+    expect(viewForPlayer(s, alive[8].id, clock).meeting!.myReady).toBe(false);
+    act(s, alive[4], { type: 'readyVote' });
+    expect(s.meeting!.stage).toBe('voting');
+    expect(err(() => act(s, alive[5], { type: 'readyVote' }))).toBe('not_now');
+  });
+
+  it('discussion : un départ ou une mort peut suffire à atteindre la majorité', () => {
+    const s = setup(10, 2, { discussionSec: 120 });
+    gmAction(s, { type: 'meeting' }, ctx());
+    for (const p of s.players) act(s, p, { type: 'checkIn' });
+    const alive = s.players.filter((p) => p.alive);
+    for (const p of alive.slice(0, 5)) act(s, p, { type: 'readyVote' }); // 5/10 : pas la majorité
+    expect(s.meeting!.stage).toBe('discussion');
+    act(s, alive[9], { type: 'leave' }); // 5/9 : majorité
+    expect(s.meeting!.stage).toBe('voting');
+  });
+
+  it('discussion : les « prêts » morts ou partis ne comptent plus', () => {
+    const s = setup(10, 2, { discussionSec: 120 });
+    gmAction(s, { type: 'meeting' }, ctx());
+    for (const p of s.players) act(s, p, { type: 'checkIn' });
+    const alive = s.players.filter((p) => p.alive);
+    for (const p of alive.slice(0, 4)) act(s, p, { type: 'readyVote' });
+    gmAction(s, { type: 'kill', playerId: alive[0].id }, ctx()); // 3 prêts sur 9
+    expect(s.meeting!.stage).toBe('discussion');
+    expect(viewForPlayer(s, alive[1].id, clock).meeting!.readyCount).toBe(3);
+    act(s, alive[5], { type: 'readyVote' }); // 4/9 : pas encore
+    expect(s.meeting!.stage).toBe('discussion');
+    act(s, alive[6], { type: 'readyVote' }); // 5/9
+    expect(s.meeting!.stage).toBe('voting');
+  });
+
+  it('badge fantôme : la mort n’est « annoncée » qu’à la réunion suivante (corps disparu compris)', () => {
+    const s = setup(10, 2, { bodyTimeoutSec: 60 });
+    const v = crew(s)[0];
+    kill(s, imps(s)[0], v);
+    advance(61_000);
+    tick(s, clock);
+    expect(v.body!.vanished).toBe(true);
+    const before = viewForPlayer(s, v.id, clock);
+    expect(before.me.bodyPending).toBe(false);
+    expect(before.me.deathRevealed).toBe(false); // fantôme libre, mais sans badge
+    gmAction(s, { type: 'meeting' }, ctx());
+    expect(viewForPlayer(s, v.id, clock).me.deathRevealed).toBe(true);
+  });
+
   it('un corps non découvert disparaît après le délai configuré', () => {
     const s = setup(10, 2, { bodyTimeoutSec: 60 });
     const v = crew(s)[0];
@@ -444,7 +665,7 @@ describe('fantômes', () => {
     const [i1] = imps(s);
     gmAction(s, { type: 'kill', playerId: i1.id }, ctx());
     advance(60_000);
-    expect(err(() => act(s, i1, { type: 'arm' }))).toBe('dead');
+    expect(err(() => act(s, i1, { type: 'kill', target: crew(s)[0].id }))).toBe('dead');
     act(s, i1, { type: 'sabotage', kind: 'lights' });
     expect(s.sabotage?.kind).toBe('lights');
     const ghost = crew(s)[0];
@@ -484,26 +705,48 @@ describe('sabotages', () => {
     expect(err(() => act(s, i2, { type: 'sabotage', kind: 'lights' }))).toBe('cooldown');
   });
 
-  it('panne de courant : les postes de l’équipage sont hors service', () => {
-    const s = setup(10, 2);
-    advance(15_000);
-    act(s, imps(s)[0], { type: 'sabotage', kind: 'lights' });
-    const c = crew(s)[0];
+  it('panne de courant : dans le noir, aucun signalement de corps ; les tâches, même en cours, continuent', () => {
+    const s = setup(10, 2, { emergencyCooldownSec: 0 });
+    advance(60_000);
+    const [i, j] = imps(s);
+    const [v, c, d] = crew(s);
+    // une tâche commencée avant la panne
     const t = c.tasks[0];
-    const def = s.terrain.tasks.find((d) => d.id === t.taskId)!;
+    const def = s.terrain.tasks.find((x) => x.id === t.taskId)!;
     const st = s.terrain.stations.find((x) => x.id === def.steps[0].stationId)!;
-    expect(err(() => act(s, c, { type: 'startTask', code: st.code, taskId: t.taskId }))).toBe('blocked_task');
+    const ch = act(s, c, { type: 'startTask', code: st.code, taskId: t.taskId }) as { id: string };
+    kill(s, i, v);
+    act(s, j, { type: 'sabotage', kind: 'lights' });
+    expect(c.challenge?.id).toBe(ch.id); // conservée
+    advance(15_000);
+    expect(act(s, c, { type: 'submit', challengeId: ch.id, answer: c.challenge!.answer })).toMatchObject({ taskDone: expect.any(Boolean) });
+    // nouvelle tâche pendant la panne : possible
+    const t2 = d.tasks[0];
+    const def2 = s.terrain.tasks.find((x) => x.id === t2.taskId)!;
+    const st2 = s.terrain.stations.find((x) => x.id === def2.steps[0].stationId)!;
+    expect(act(s, d, { type: 'startTask', code: st2.code, taskId: t2.taskId })).toHaveProperty('id');
+    // signalement impossible, sans compter comme code erroné ni consommer le corps
+    for (let k = 0; k < 8; k++) expect(err(() => act(s, d, { type: 'report', code: v.body!.code }))).toBe('dark');
+    expect(d.blockedUntil).toBe(0);
+    expect(s.phase).toBe('playing');
+    // bouton d'urgence bloqué aussi
+    expect(err(() => act(s, d, { type: 'callEmergency', code: stationOf(s, 'emergency').code }))).toBe('cannot_call');
+    // après réparation, le corps peut être signalé
+    const fix = act(s, c, { type: 'fixStart', code: stationOf(s, 'lights').code }) as { id: string };
+    advance(3_000);
+    expect(act(s, c, { type: 'submit', challengeId: fix.id, answer: 'done' })).toEqual({ fixed: true });
+    act(s, d, { type: 'report', code: v.body!.code });
+    expect(s.phase).toBe('meeting');
   });
 
   it('un imposteur a le même écran qu\u2019un équipier pendant panne et communications (aucun indice visuel)', () => {
     const s = setup(10, 2);
     advance(15_000);
     const i = imps(s)[0];
+    const c = crew(s)[0];
     act(s, imps(s)[1], { type: 'sabotage', kind: 'lights' });
-    const t = i.tasks[0];
-    const def = s.terrain.tasks.find((d) => d.id === t.taskId)!;
-    const st = s.terrain.stations.find((x) => x.id === def.steps[0].stationId)!;
-    expect(err(() => act(s, i, { type: 'startTask', code: st.code, taskId: t.taskId }))).toBe('blocked_task');
+    const strip = (x: ReturnType<typeof viewForPlayer>) => ({ tasksHidden: x.me.tasksHidden, sabotage: x.sabotage, taskBar: x.taskBar });
+    expect(strip(viewForPlayer(s, i.id, clock))).toEqual(strip(viewForPlayer(s, c.id, clock)));
     gmAction(s, { type: 'fixSabotage' }, ctx());
     advance(31_000);
     act(s, imps(s)[1], { type: 'sabotage', kind: 'comms' });
@@ -649,7 +892,7 @@ describe('maître du jeu', () => {
     const s = setup(10, 2);
     gmAction(s, { type: 'stop' }, ctx());
     advance(60_000);
-    expect(err(() => act(s, imps(s)[0], { type: 'arm' }))).toBe('paused');
+    expect(err(() => act(s, imps(s)[0], { type: 'kill', target: crew(s)[0].id }))).toBe('paused');
     expect(s.emergencyStop).toBe(true);
   });
 

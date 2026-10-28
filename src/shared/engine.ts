@@ -5,7 +5,7 @@ import { FIXES, SABOTAGE_INFO } from './catalog';
 import { checkAnswer, makeFixChallenge, makeTaskChallenge } from './puzzles';
 import { cryptoRng, normalizeCode, randomDigits, shuffle, type Rng } from './rng';
 import { validSubscription } from './webpush';
-import { DEFAULT_SETTINGS, sanitizeSettings } from './settings';
+import { DEFAULT_SETTINGS, GATHER_MAJORITY_SEC, sanitizeSettings } from './settings';
 import { availableSabotages, exampleTerrain, newId, sanitizeTerrain, startProblems } from './terrain';
 import type {
   ActiveSabotage, Challenge, FixKind, GameState, Meeting, PlayerState, SabotageKind, Settings, Station, Terrain, VoteResult, Winner,
@@ -186,17 +186,14 @@ function registerFailure(s: GameState, p: PlayerState, now: number, what: string
   }
 }
 
-function activeCodes(s: GameState, now: number): Set<string> {
+function activeCodes(s: GameState): Set<string> {
   const set = new Set<string>();
-  for (const p of s.players) {
-    if (p.killCode && p.killCode.expiresAt > now) set.add(p.killCode.code);
-    if (p.body && !p.body.reported && !p.body.vanished) set.add(p.body.code);
-  }
+  for (const p of s.players) if (p.body && !p.body.reported && !p.body.vanished) set.add(p.body.code);
   return set;
 }
 
-function uniqueDigits(s: GameState, now: number, rng: Rng): string {
-  const used = activeCodes(s, now);
+function uniqueDigits(s: GameState, rng: Rng): string {
+  const used = activeCodes(s);
   for (;;) {
     const c = randomDigits(4, rng);
     if (!used.has(c)) return c;
@@ -230,14 +227,15 @@ export function startGame(s: GameState, ctx: Ctx) {
     p.killedBy = undefined;
     p.body = undefined;
     p.challenge = undefined;
-    p.killCode = undefined;
+    p.disputed = undefined;
+    p.lastStationId = undefined;
     p.kills = 0;
     p.checkedIn = false;
     p.failures = [];
     p.blockedUntil = 0;
     p.emergencyLeft = st.emergencyMeetingsPerPlayer;
     p.killCooldownUntil = now + sec(st.initialKillCooldownSec);
-    const mine = [...common, ...shuffle(longs, ctx.rng).slice(0, st.longTasks), ...shuffle(shorts, ctx.rng).slice(0, st.shortTasks)];
+    const mine = personalOrder([...common, ...shuffle(longs, ctx.rng).slice(0, st.longTasks), ...shuffle(shorts, ctx.rng).slice(0, st.shortTasks)], ctx.rng);
     p.tasks = mine.map((t) => ({ taskId: t.id, step: 0, done: false }));
   }
   s.phase = 'playing';
@@ -258,6 +256,22 @@ export function startGame(s: GameState, ctx: Ctx) {
   log(s, now, 'roles', `Imposteurs : ${players.filter((p) => p.role === 'impostor').map((p) => p.name).join(', ')}.`, true);
 }
 
+/**
+ * Ordre des tâches propre à chaque joueur : mélangé, et jamais une tâche commune en premier
+ * (sinon tout le monde se précipiterait au même poste au début de la partie).
+ */
+export function personalOrder<T extends { type: string }>(tasks: T[], rng: Rng): T[] {
+  const out = shuffle(tasks, rng);
+  if (out[0]?.type === 'common') {
+    const others = out.map((t, i) => (t.type === 'common' ? -1 : i)).filter((i) => i > 0);
+    if (others.length) {
+      const j = others[rng.int(others.length)];
+      [out[0], out[j]] = [out[j], out[0]];
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Fin de partie
 // ---------------------------------------------------------------------------
@@ -270,10 +284,7 @@ export function endGame(s: GameState, winner: Winner, reason: string, now: numbe
   }
   if (s.meeting) archiveMeeting(s);
   s.meeting = undefined;
-  for (const p of s.players) {
-    p.challenge = undefined;
-    p.killCode = undefined;
-  }
+  for (const p of s.players) p.challenge = undefined;
   s.phase = 'ended';
   s.paused = false;
   s.emergencyStop = false;
@@ -315,10 +326,7 @@ export function checkWin(s: GameState, now: number): boolean {
 // ---------------------------------------------------------------------------
 
 function clearVolatile(s: GameState) {
-  for (const p of s.players) {
-    p.challenge = undefined;
-    p.killCode = undefined;
-  }
+  for (const p of s.players) p.challenge = undefined;
   if (s.sabotage) s.sabotage.holds = [];
 }
 
@@ -348,6 +356,7 @@ export function startMeeting(s: GameState, kind: Meeting['kind'], now: number, c
     stage: 'gather',
     stageEndsAt: now + sec(s.settings.gatherSec),
     votes: {},
+    ready: [],
     deadAtStart: s.players.filter((p) => inGame(p) && !p.alive).map((p) => p.id),
     newlyDead,
     endedSabotage,
@@ -458,7 +467,31 @@ function maybeEndGather(s: GameState, now: number) {
   const m = s.meeting;
   if (!m || m.stage !== 'gather') return;
   const v = voters(s);
-  if (v.length > 0 && v.every((p) => p.checkedIn)) advanceMeeting(s, now);
+  if (v.length > 0 && v.every((p) => p.checkedIn)) return advanceMeeting(s, now);
+  // majorité arrivée : on n'attend plus les retardataires que quelques secondes (une seule fois, pour qu'un « +30 s » du MJ tienne)
+  if (m.majorityAt === undefined && 2 * v.filter((p) => p.checkedIn).length > v.length) {
+    m.majorityAt = now;
+    m.stageEndsAt = Math.min(m.stageEndsAt, now + sec(GATHER_MAJORITY_SEC));
+  }
+}
+
+/** Nombre de vivants « prêts à voter » (seuls les vivants encore en jeu comptent). */
+export function readyCount(s: GameState, m: Meeting): number {
+  const ready = new Set(m.ready ?? []);
+  return voters(s).filter((p) => ready.has(p.id)).length;
+}
+
+function maybeEndDiscussion(s: GameState, now: number) {
+  const m = s.meeting;
+  if (!m || m.stage !== 'discussion') return;
+  if (2 * readyCount(s, m) > voters(s).length) advanceMeeting(s, now);
+}
+
+function meetingRecheck(s: GameState, now: number) {
+  if (s.phase !== 'meeting') return;
+  maybeEndGather(s, now);
+  maybeEndDiscussion(s, now);
+  maybeEndVoting(s, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -510,10 +543,6 @@ export function tick(s: GameState, now: number): boolean {
   let changed = false;
   if (s.phase === 'playing') {
     for (const p of s.players) {
-      if (p.killCode && p.killCode.expiresAt <= now) {
-        p.killCode = undefined;
-        changed = true;
-      }
       if (p.body && !p.body.reported && !p.body.vanished && p.body.vanishAt && p.body.vanishAt <= now) {
         p.body.vanished = true;
         log(s, now, 'body_vanish', `Le corps de ${p.name} n’a pas été découvert à temps et disparaît.`, true);
@@ -551,7 +580,6 @@ export function nextWakeup(s: GameState, now: number): number | undefined {
   if (s.phase === 'meeting' && s.meeting) times.push(s.meeting.stageEndsAt);
   if (s.phase === 'playing') {
     for (const p of s.players) {
-      if (p.killCode) times.push(p.killCode.expiresAt);
       if (p.body && !p.body.reported && !p.body.vanished && p.body.vanishAt) times.push(p.body.vanishAt);
     }
     const sab = s.sabotage;
@@ -575,7 +603,6 @@ function shiftTimers(s: GameState, delta: number) {
   }
   for (const p of s.players) {
     p.killCooldownUntil += delta;
-    if (p.killCode) p.killCode.expiresAt += delta;
     if (p.body?.vanishAt) p.body.vanishAt += delta;
     if (p.challenge) p.challenge.startedAt += delta;
     if (p.blockedUntil) p.blockedUntil += delta;
@@ -593,13 +620,13 @@ export type PlayerAction =
   | { type: 'cancelChallenge' }
   | { type: 'callEmergency'; code: string }
   | { type: 'report'; code: string }
-  | { type: 'arm' }
-  | { type: 'disarm' }
-  | { type: 'killed'; code: string }
+  | { type: 'kill'; target: string }
+  | { type: 'dispute' }
   | { type: 'sabotage'; kind: SabotageKind }
   | { type: 'fixStart'; code: string }
   | { type: 'hold'; code: string; on: boolean }
   | { type: 'checkIn' }
+  | { type: 'readyVote' }
   | { type: 'vote'; target: string }
   | { type: 'alert'; message?: string }
   | { type: 'leave' }
@@ -632,9 +659,8 @@ export function gmChallengeView(s: GameState) {
 }
 export { challengeView };
 
-function taskBlockReason(s: GameState, p: PlayerState, station: Station): string | undefined {
-  // Tous les vivants sont concernés (imposteurs compris) : le téléphone d'un imposteur se comporte comme celui d'un équipier.
-  if (s.sabotage?.kind === 'lights' && p.alive) return 'Panne de courant : les postes sont hors service. Réparez au poste Énergie.';
+function taskBlockReason(p: PlayerState): string | undefined {
+  // La panne de courant ne bloque plus les tâches (elle empêche de signaler les corps).
   if (bodyPending(p)) return 'Vous êtes un corps : restez sur place jusqu’à la découverte ou la prochaine réunion.';
   return undefined;
 }
@@ -644,7 +670,7 @@ function scanStation(s: GameState, p: PlayerState, station: Station, now: number
   const base = { stationId: station.id, name: station.name, kind: station.kind, roomName: roomName(s, station.roomId) };
   switch (station.kind) {
     case 'task': {
-      const block = taskBlockReason(s, p, station);
+      const block = taskBlockReason(p);
       const tasks = p.tasks
         .filter((a) => !a.done)
         .map((a) => {
@@ -714,6 +740,28 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       markLeft(s, p, now, `${p.name} a quitté la partie.`);
       return { ok: true };
     }
+    case 'dispute': {
+      requireInGame(p);
+      if (s.phase !== 'playing' && s.phase !== 'meeting') fail('not_playing', 'La partie n’est pas en cours.');
+      if (p.alive || p.deathCause !== 'killed') fail('not_killed', 'Seul un joueur éliminé par un imposteur peut contester.');
+      if (p.disputed) fail('already', 'Contestation déjà envoyée au maître du jeu.');
+      p.disputed = true;
+      const message = `Conteste son élimination (attribuée à ${nameOf(s, p.killedBy)}) : « je n’ai pas été touché·e ».`;
+      s.alerts.push({ id: s.nextAlertId++, kind: 'dispute', at: now, playerId: p.id, message, acked: false });
+      log(s, now, 'dispute', `${p.name} ${message}`, true);
+      return { ok: true };
+    }
+    case 'readyVote': {
+      requireInGame(p);
+      const m = s.meeting;
+      if (s.phase !== 'meeting' || !m || m.stage !== 'discussion') fail('not_now', 'Pas de discussion en cours.');
+      if (s.paused) fail('paused', 'La partie est en pause.');
+      if (!p.alive) fail('dead', 'Les fantômes ne votent pas.');
+      m!.ready ??= [];
+      if (!m!.ready.includes(p.id)) m!.ready.push(p.id);
+      maybeEndDiscussion(s, now);
+      return { ok: true };
+    }
     case 'checkIn': {
       requireInGame(p);
       if (s.phase !== 'meeting' || s.meeting?.stage !== 'gather') fail('not_now', 'Pas de rassemblement en cours.');
@@ -770,7 +818,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       const def = s.terrain.tasks.find((t) => t.id === assigned!.taskId)!;
       const step = def.steps[assigned!.step];
       if (!step || step.stationId !== station!.id) fail('wrong_station', 'Ce n’est pas le bon poste pour cette étape.');
-      const block = taskBlockReason(s, p, station!);
+      const block = taskBlockReason(p);
       if (block) fail('blocked_task', block);
       const ch = makeTaskChallenge(step.game, def.seed, rng);
       const purpose = p.role === 'impostor' ? 'fake' : 'task';
@@ -790,7 +838,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       if (now - c!.startedAt < c!.minMs - 300) fail('too_fast', 'Trop rapide ! Prenez le temps de terminer le mini-jeu.');
       const station = s.terrain.stations.find((x) => x.id === c!.stationId)!;
       if (c!.purpose !== 'fix') {
-        const block = taskBlockReason(s, p, station);
+        const block = taskBlockReason(p);
         if (block) {
           p.challenge = undefined;
           fail('blocked_task', block);
@@ -804,17 +852,20 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
         fail('wrong', 'Ce n’est pas la bonne réponse. Réessayez.');
       }
       p.challenge = undefined;
-      if (c!.purpose === 'fake') return { fake: true };
       if (c!.purpose === 'fix') return applyFix(s, p, station, now);
+      // Tâche réelle ou simulée (imposteur) : même progression et même réponse, pour que les deux téléphones
+      // soient indiscernables. Seules les tâches de l'équipage comptent dans la barre (taskProgress).
       const assigned = p.tasks.find((t) => t.taskId === c!.taskId);
       if (!assigned || assigned.done || assigned.step !== c!.stepIndex) fail('task_state', 'Cette étape a déjà été validée.');
       const def = s.terrain.tasks.find((t) => t.id === assigned!.taskId)!;
       assigned!.step++;
+      p.lastStationId = station.id;
+      const fake = c!.purpose === 'fake';
       if (assigned!.step >= def.steps.length) {
         assigned!.done = true;
         assigned!.doneAt = now;
-        log(s, now, 'task', `${p.name} a terminé « ${def.name} »${p.alive ? '' : ' (fantôme)'}.`, true);
-        checkWin(s, now);
+        log(s, now, 'task', `${p.name} a ${fake ? 'simulé' : 'terminé'} « ${def.name} »${p.alive ? '' : ' (fantôme)'}.`, true);
+        if (!fake) checkWin(s, now);
         return { taskDone: true };
       }
       return { taskDone: false, nextStep: assigned!.step + 1 };
@@ -837,6 +888,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
     case 'report': {
       if (!p.alive) fail('dead', 'Les fantômes ne peuvent pas signaler de corps.');
       checkBlocked(p, now);
+      if (s.sabotage?.kind === 'lights') fail('dark', 'Panne de courant : dans le noir, impossible de signaler un corps. Réparez d’abord au poste Énergie.');
       const code = normalizeCode(a.code);
       const body = s.players.find((x) => x.body && x.body.code === code && !x.body.reported && !x.body.vanished && !x.alive);
       if (!body) {
@@ -848,32 +900,18 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       return { ok: true };
     }
 
-    case 'arm': {
+    case 'kill': {
+      // L'imposteur touche sa victime puis choisit son pseudonyme : la victime n'a rien à saisir.
       if (p.role !== 'impostor') fail('forbidden', 'Action réservée aux imposteurs.');
       if (!p.alive) fail('dead', 'Les fantômes ne peuvent pas éliminer.');
       if (now < p.killCooldownUntil) fail('cooldown', `Élimination disponible dans ${Math.ceil((p.killCooldownUntil - now) / 1000)} s.`);
-      if (p.killCode && p.killCode.expiresAt > now) return { code: p.killCode.code, expiresAt: p.killCode.expiresAt };
-      p.killCode = { code: uniqueDigits(s, now, rng), expiresAt: now + sec(s.settings.killCodeTtlSec) };
-      return { code: p.killCode.code, expiresAt: p.killCode.expiresAt };
-    }
-
-    case 'disarm': {
-      p.killCode = undefined;
-      return { ok: true };
-    }
-
-    case 'killed': {
-      if (!p.alive) fail('dead', 'Vous êtes déjà mort·e.');
-      checkBlocked(p, now);
-      const code = normalizeCode(a.code);
-      const killer = s.players.find((x) => x.id !== p.id && x.role === 'impostor' && x.alive && inGame(x) && x.killCode && x.killCode.code === code && x.killCode.expiresAt > now);
-      if (!killer || p.role === 'impostor') {
-        // message volontairement identique dans tous les cas : aucune information sur les rôles
-        if (p.role !== 'impostor') registerFailure(s, p, now, 'code d’élimination');
-        fail('bad_code', 'Code invalide ou expiré. Demandez à la personne de vous remontrer son code.');
-      }
-      killPlayer(s, p, now, 'killed', killer!);
-      return { body: p.body!.code };
+      const v = s.players.find((x) => x.id === String(a.target ?? ''));
+      if (!v || v.id === p.id || !inGame(v)) fail('bad_target', 'Joueur introuvable.');
+      // l'imposteur connaît déjà ses alliés : ce refus ne révèle rien
+      if (v!.role === 'impostor') fail('ally', 'Impossible : c’est un allié imposteur.');
+      if (!v!.alive) fail('bad_target', 'Ce joueur ne peut pas être éliminé.');
+      killPlayer(s, v!, now, 'killed', p);
+      return { ok: true, name: v!.name };
     }
 
     case 'sabotage': {
@@ -887,13 +925,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       if (kind === 'reactor') sab.deadline = now + sec(st.reactorSec);
       if (kind === 'oxygen') sab.deadline = now + sec(st.oxygenSec);
       s.sabotage = sab;
-      // Effets immédiats sur les mini-jeux en cours.
-      for (const x of s.players) {
-        const c = x.challenge;
-        if (!c || c.purpose === 'fix') continue;
-        const station = s.terrain.stations.find((y) => y.id === c.stationId);
-        if (station && taskBlockReason(s, x, station)) x.challenge = undefined;
-      }
+      // Les mini-jeux en cours sont conservés (aucun sabotage n'interrompt une tâche).
       log(s, now, 'sabotage', `Sabotage : ${SABOTAGE_INFO[kind].label}.`);
       log(s, now, 'sabotage_by', `Sabotage déclenché par ${p.name}.`, true);
       return { ok: true };
@@ -968,18 +1000,16 @@ export function killPlayer(s: GameState, victim: PlayerState, now: number, cause
   victim.deathCause = cause;
   victim.killedBy = killer?.id;
   victim.challenge = undefined;
-  victim.killCode = undefined;
   if (s.sabotage) s.sabotage.holds = s.sabotage.holds.filter((h) => h.playerId !== victim.id);
   if (s.phase === 'playing') {
     const t = s.settings.bodyTimeoutSec;
-    victim.body = { code: uniqueDigits(s, now, cryptoRng), at: now, reported: false, vanished: false, vanishAt: t > 0 ? now + sec(t) : undefined };
+    victim.body = { code: uniqueDigits(s, cryptoRng), at: now, reported: false, vanished: false, vanishAt: t > 0 ? now + sec(t) : undefined };
     victim.deathRevealed = false;
   } else {
     victim.body = undefined;
     victim.deathRevealed = true;
   }
   if (killer) {
-    killer.killCode = undefined;
     killer.killCooldownUntil = now + sec(s.settings.killCooldownSec);
     killer.kills++;
     log(s, now, 'kill', `${killer.name} a éliminé ${victim.name}.`, true);
@@ -998,14 +1028,10 @@ function markLeft(s: GameState, p: PlayerState, now: number, msg: string) {
   }
   p.deathRevealed = true;
   p.challenge = undefined;
-  p.killCode = undefined;
   if (p.body) p.body.vanished = true;
   if (s.sabotage) s.sabotage.holds = s.sabotage.holds.filter((h) => h.playerId !== p.id);
   log(s, now, 'left', msg);
-  if (s.phase === 'meeting') {
-    maybeEndGather(s, now);
-    maybeEndVoting(s, now);
-  }
+  meetingRecheck(s, now);
   checkWin(s, now);
 }
 
@@ -1145,6 +1171,7 @@ export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
       p.deathCause = undefined;
       p.killedBy = undefined;
       p.body = undefined;
+      p.disputed = undefined;
       log(s, now, 'gm', `Correction : ${p.name} est ramené·e à la vie par le maître du jeu.`);
       if (s.phase === 'playing') checkWin(s, now);
       return { ok: true };
@@ -1155,10 +1182,7 @@ export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
       if (!p.alive) fail('dead', 'Ce joueur est déjà mort.');
       if (!p.role) fail('no_role', 'Ce joueur ne participe pas.');
       killPlayer(s, p, now, 'gm');
-      if (s.phase === 'meeting') {
-        maybeEndGather(s, now);
-        maybeEndVoting(s, now);
-      }
+      meetingRecheck(s, now);
       return { ok: true, body: p.body?.code };
     }
     case 'taskDone': {
@@ -1242,7 +1266,8 @@ export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
         p.tasks = [];
         p.body = undefined;
         p.challenge = undefined;
-        p.killCode = undefined;
+        p.disputed = undefined;
+        p.lastStationId = undefined;
         p.kills = 0;
         p.checkedIn = false;
         p.failures = [];

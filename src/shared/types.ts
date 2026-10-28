@@ -92,7 +92,6 @@ export interface Settings {
   impostors: number;
   killCooldownSec: number;
   initialKillCooldownSec: number;
-  killCodeTtlSec: number;
   emergencyMeetingsPerPlayer: number;
   emergencyCooldownSec: number;
   gatherSec: number;
@@ -164,7 +163,10 @@ export interface PlayerState {
   tasks: AssignedTask[];
   emergencyLeft: number;
   killCooldownUntil: number;
-  killCode?: { code: string; expiresAt: number };
+  /** Contestation de son élimination déjà envoyée au MJ (une seule par mort). */
+  disputed?: boolean;
+  /** Poste de la dernière étape de tâche réussie (sert à proposer une prochaine étape proche). */
+  lastStationId?: string;
   body?: Body;
   challenge?: Challenge;
   failures: number[];
@@ -208,6 +210,10 @@ export interface Meeting {
   stage: MeetingStage;
   stageEndsAt: number;
   votes: Record<string, string>;
+  /** Joueurs vivants qui ont touché « Prêt à voter » pendant la discussion. */
+  ready?: string[];
+  /** Instant où la majorité est arrivée au rassemblement (le minuteur n'est raccourci qu'une fois : une prolongation du MJ tient). */
+  majorityAt?: number;
   deadAtStart: string[];
   newlyDead: string[];
   result?: VoteResult;
@@ -235,6 +241,8 @@ export interface LogEntry {
 
 export interface SafetyAlert {
   id: number;
+  /** 'dispute' = un joueur conteste son élimination (sinon alerte sécurité). */
+  kind?: 'safety' | 'dispute';
   at: number;
   playerId: string;
   message: string;

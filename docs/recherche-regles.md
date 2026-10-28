@@ -64,8 +64,8 @@ Pour chaque mécanique : fonctionnement officiel → déclenchement → restrict
 
 ### 6. Élimination — ✅ / 🟡
 - **Officiel** : un imposteur vivant élimine un équipier proche (distance courte/moyenne/longue) ; délai 10 à 60 s (45 s par défaut), **10 s au premier tour**, remis au maximum après chaque élimination et chaque réunion ; impossible pendant une réunion ; pas d’élimination d’un imposteur ni d’un fantôme ; la victime laisse un corps.
-- **Maison** : voir `conception.md` §4 (analyse de 5 méthodes). Retenu : **code d’élimination à usage unique**. L’imposteur arme un code (seulement si son délai est écoulé), touche l’épaule de la victime et lui montre le code ; la victime le saisit sur son propre téléphone.
-- **Technique** : code à 4 chiffres valable 45 s (réglable), unique parmi les codes actifs, invalidé par une réunion, refusé pour un mort, pour un imposteur (message générique qui ne révèle rien), réutilisation impossible.
+- **Maison** : voir `conception.md` §4 (analyse de 6 méthodes). Retenu : **l’imposteur choisit le pseudonyme de sa victime** après l’avoir touchée ; la victime n’a rien à saisir et peut contester auprès du MJ. (La première version utilisait un code à 4 chiffres saisi par la victime : trop long et trop visible en pratique.)
+- **Technique** : refus si le délai n’est pas écoulé, pendant une réunion ou une pause, pour un mort, un joueur parti, soi-même ou un allié (l’imposteur connaît déjà ses alliés : aucune fuite) ; un refus ne consomme pas le délai ; une contestation par mort.
 - **Différence** : délais allongés par défaut (60 s, premier : 30 s) car les joueurs marchent ; la proximité est garantie par le geste physique, pas par le téléphone.
 
 ### 7. Sabotages — 🟡
@@ -73,7 +73,7 @@ Pour chaque mécanique : fonctionnement officiel → déclenchement → restrict
 |---|---|---|---|
 | Réacteur / Stabilisateurs (critique) | compte à rebours 30–60 s | 2 joueurs posent la main **simultanément** sur 2 scanners | 2 postes « Réacteur » ; deux joueurs **vivants et distincts** maintiennent un bouton en même temps pendant 2,5 s. Défaut : 75 s. |
 | Oxygène / Crash (critique) | compte à rebours 30–45 s | code saisi sur **2 claviers** distincts | 2 postes « Oxygène » ; à chacun, un code PIN affiché à recopier. Défaut : 90 s. |
-| Lumières | vision de l’équipage très réduite | interrupteurs sur un tableau | **Panne de courant** : les postes de tâches sont hors service pour tous les vivants (aucune vraie lumière coupée). Réparation au poste « Énergie (fictif) » : 5 interrupteurs virtuels. |
+| Lumières | vision de l’équipage très réduite | interrupteurs sur un tableau | **Panne de courant** : « dans le noir, on ne voit pas les corps » — aucun signalement de corps possible tant qu’elle dure (les tâches continuent ; aucune vraie lumière coupée). Comme dans le jeu, elle ouvre une fenêtre d’élimination aux imposteurs. Réparation au poste « Énergie (fictif) » : 5 interrupteurs virtuels. |
 | Communications | liste des tâches, barre, caméras, admin, vitales indisponibles | régler une fréquence / 2 claviers | Liste des tâches et barre masquées, moniteur de vie indisponible. Réparation au poste « Radio » : aligner deux ondes. |
 | Portes | salle fermée ~10 s | se rouvrent seules (ou manuellement selon la carte) | **Non reproduit** (retiré après essai) : une porte réelle ne se ferme ni ne se rouvre toute seule, et on ne verrouille jamais une porte. Une simple « interdiction d’entrer » n’était ni vérifiable ni perceptible (personne ne sait quand la salle « se rouvre »). Voir `limites-mecaniques.md`. |
 - Règles communes (🟡) : un seul sabotage à la fois ; délai partagé 30 s (10 s au début) qui démarre à la réparation ; les imposteurs fantômes peuvent saboter ; **les fantômes ne réparent pas** ; le bouton d’urgence est bloqué pendant un sabotage (sauf portes, absentes ici) ; **signaler un corps interrompt un sabotage critique** (les lumières/communications persistent).
@@ -94,7 +94,7 @@ Pour chaque mécanique : fonctionnement officiel → déclenchement → restrict
 
 ### 11. Chronologie de la réunion — 🟡
 - **Officiel** : téléportation de tous → discussion (15 s par défaut) → vote (120 s) → résultat → éjection.
-- **Maison** : ajout d’une phase **rassemblement** (90 s, ou plus tôt quand tous les vivants ont touché « Je suis arrivé·e ») car on ne se téléporte pas ; discussion 90 s ; vote 90 s ; résultat 12 s ; puis reprise automatique.
+- **Maison** : ajout d’une phase **rassemblement** (90 s, ou plus tôt quand tous les vivants ont touché « Je suis arrivé·e » ; dès que la majorité est arrivée, il ne reste que 15 s aux retardataires) car on ne se téléporte pas ; discussion 90 s, écourtée dès que la majorité des vivants a touché « Prêt à voter » ; vote 90 s ; résultat 12 s ; puis reprise automatique.
 
 ### 12. Vote — 🟡
 - **Officiel** : chaque vivant vote pour un vivant ou « passer » ; vote définitif ; fin anticipée quand tous ont voté ; le plus de voix est éjecté ; **égalité, « passer » majoritaire, égalité avec « passer » ou aucun vote → personne** ; ne pas voter = abstention ; votes anonymes en option ; on voit qui a déjà voté.

@@ -7,32 +7,79 @@ import type { FixKind, GameKind } from './types';
 
 export const WIRE_COLORS = ['#ff4d4d', '#3d8bff', '#ffd23d', '#d65cff'] as const;
 
-/** Énigme « inventaire » : grille de symboles imprimée + question, réponse dérivée de la graine. */
+export const COUNT_COLS = 8;
+export const COUNT_ROWS = 6;
+export const ROW_LABELS = 'ABCDEF';
+
+/** Zones de la grille sur lesquelles porte une question (les lignes sont A à F, les colonnes 1 à 8). */
+export const COUNT_SCOPES = {
+  all: { label: 'sur toute la grille', has: (_r: number, _c: number) => true },
+  top: { label: 'dans la moitié haute (lignes A à C)', has: (r: number) => r < 3 },
+  bottom: { label: 'dans la moitié basse (lignes D à F)', has: (r: number) => r >= 3 },
+  left: { label: 'dans la moitié gauche (colonnes 1 à 4)', has: (_r: number, c: number) => c < 4 },
+  right: { label: 'dans la moitié droite (colonnes 5 à 8)', has: (_r: number, c: number) => c >= 4 },
+} as const;
+export type CountScope = keyof typeof COUNT_SCOPES;
+
+/**
+ * Énigme « inventaire » : une grille de symboles imprimée. La fiche ne porte AUCUNE question :
+ * le serveur en tire une au hasard à chaque fois (6 symboles × 5 zones = 30 questions), la réponse
+ * ne peut donc pas être retenue d'une fois sur l'autre.
+ */
 export function countPuzzle(seed: number) {
   const rng = seededRng(seed);
-  const cols = 8;
-  const rows = 6;
   const grid: number[] = [];
-  for (let i = 0; i < cols * rows; i++) grid.push(rng.int(SYMBOLS.length));
-  const target = rng.int(SYMBOLS.length);
-  const answer = grid.filter((g) => g === target).length;
-  return {
-    cols,
-    rows,
-    grid: grid.map((g) => SYMBOLS[g]),
-    question: `Combien de ${SYMBOL_NAMES[target]} (${SYMBOLS[target]}) sur la fiche ?`,
-    answer: String(answer),
-  };
+  for (let i = 0; i < COUNT_COLS * COUNT_ROWS; i++) grid.push(rng.int(SYMBOLS.length));
+  return { cols: COUNT_COLS, rows: COUNT_ROWS, grid: grid.map((g) => SYMBOLS[g]) };
 }
 
-/** Énigme « puzzle » : un mot découpé en bandes imprimées dans le désordre. */
+/** Réponse à une question d'inventaire (calculable par la fiche imprimée comme par le serveur). */
+export function countAnswer(seed: number, sym: number, scope: CountScope): string {
+  const { grid } = countPuzzle(seed);
+  let n = 0;
+  grid.forEach((g, i) => {
+    if (g === SYMBOLS[sym] && COUNT_SCOPES[scope].has(Math.floor(i / COUNT_COLS), i % COUNT_COLS)) n++;
+  });
+  return String(n);
+}
+
+export function countQuestion(sym: number, scope: CountScope): string {
+  return `Combien de ${SYMBOL_NAMES[sym]} (${SYMBOLS[sym]}) ${COUNT_SCOPES[scope].label} ?`;
+}
+
+/** Toutes les questions possibles d'une fiche, avec leur réponse (onglet Tests du MJ, tests automatisés). */
+export function countQuestions(seed: number) {
+  const out: { sym: number; scope: CountScope; question: string; answer: string }[] = [];
+  for (let sym = 0; sym < SYMBOLS.length; sym++) {
+    for (const scope of Object.keys(COUNT_SCOPES) as CountScope[]) out.push({ sym, scope, question: countQuestion(sym, scope), answer: countAnswer(seed, sym, scope) });
+  }
+  return out;
+}
+
+export type AssembleLine = 'top' | 'bottom';
+export const ASSEMBLE_LINES: Record<AssembleLine, string> = {
+  top: 'lettres du HAUT (noires sur fond blanc)',
+  bottom: 'lettres du BAS (blanches sur fond noir)',
+};
+
+/**
+ * Énigme « puzzle » : des bandes découpées, rangées dans l'ordre du nombre de points.
+ * Chaque bande porte DEUX lettres (haut et bas) : remises dans l'ordre, la ligne du haut et
+ * celle du bas forment deux mots différents ; le serveur demande l'un des deux au hasard.
+ */
 export function assemblePuzzle(seed: number) {
   const rng = seededRng(seed ^ 0x9e3779b9);
   const word = ASSEMBLE_WORDS[rng.int(ASSEMBLE_WORDS.length)];
-  // Chaque bande porte une lettre et un morceau de motif : remises dans l'ordre, elles forment une flèche continue.
-  const letters = word.split('').map((l, i) => ({ letter: l, index: i }));
+  const partners = ASSEMBLE_WORDS.filter((w) => w.length === word.length && w !== word);
+  const word2 = partners[rng.int(partners.length)];
+  const letters = word.split('').map((l, i) => ({ letter: l, bottom: word2[i], index: i }));
   const pieces = shuffle(letters, rng);
-  return { word, pieces, answer: word };
+  return { word, word2, pieces };
+}
+
+export function assembleAnswer(seed: number, line: AssembleLine): string {
+  const p = assemblePuzzle(seed);
+  return line === 'top' ? p.word : p.word2;
 }
 
 export function normalizeAnswer(s: unknown): string {
@@ -74,12 +121,15 @@ export function makeTaskChallenge(game: GameKind, seed: number, rng: Rng): NewCh
       return { game, params: { target }, answer: target, minMs };
     }
     case 'count': {
-      const p = countPuzzle(seed);
-      return { game, params: { question: p.question }, answer: p.answer, minMs };
+      // une question tirée au hasard parmi celles dont la réponse n'est pas zéro
+      const qs = countQuestions(seed).filter((q) => q.answer !== '0');
+      const q = qs[rng.int(qs.length)];
+      return { game, params: { question: q.question, sym: q.sym, scope: q.scope }, answer: q.answer, minMs };
     }
     case 'assemble': {
       const p = assemblePuzzle(seed);
-      return { game, params: { letters: p.word.length }, answer: p.answer, minMs };
+      const line: AssembleLine = rng.int(2) === 0 ? 'top' : 'bottom';
+      return { game, params: { letters: p.word.length, line, lineLabel: ASSEMBLE_LINES[line] }, answer: line === 'top' ? p.word : p.word2, minMs };
     }
     default:
       return { game, params: {}, answer: 'done', minMs };

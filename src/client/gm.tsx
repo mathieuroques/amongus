@@ -59,13 +59,14 @@ export function GmApp({ conn }: { conn: Conn }) {
         <span class="title grow">🎬 Maître du jeu · {v.code}</span>
         <NetBadge status={st.status} />
       </div>
-      <OfflineBanner status={st.status} />
+      <OfflineBanner status={st.status} waiting={st.waiting} />
       <AlertOverlay />
       {inGame && <StatusBar v={v} conn={conn} />}
       {alerts.map((a) => (
         <div class="alarm critical" key={a.id}>
           <span class="grow">
-            ⚠️ ALERTE de {a.playerName} : {a.message}
+            {a.kind === 'dispute' ? `⚖️ CONTESTATION de ${a.playerName}` : `⚠️ ALERTE de ${a.playerName}`} : {a.message}
+            {a.kind === 'dispute' && <small style={{ display: 'block', color: 'inherit' }}>Écoutez les deux joueurs en privé ; si besoin : onglet Joueurs → {a.playerName} → « Annuler la mort ».</small>}
           </span>
           <ActButton class="small" run={() => conn.act({ type: 'ackAlert', id: a.id })}>
             Vu
@@ -397,6 +398,11 @@ function MeetingPanel({ v, conn, now }: { v: GmView; conn: Conn; now: number }) 
           Arrivés : {m.checkedInCount}/{m.aliveCount}
         </p>
       )}
+      {m.stage === 'discussion' && (
+        <p style={{ margin: 0 }}>
+          Prêts à voter : {m.readyCount}/{m.aliveCount} (vote dès {Math.floor(m.aliveCount / 2) + 1})
+        </p>
+      )}
       {(m.stage === 'voting' || m.stage === 'result') && (
         <p style={{ margin: 0 }}>
           Votes : {m.votes.length}/{m.aliveCount} {m.votes.length > 0 && <small>({m.votes.map((x) => `${x.voter}→${x.target}`).join(', ')})</small>}
@@ -601,7 +607,6 @@ const FIELDS: { key: keyof Settings; label: string; unit?: string; official?: st
   { key: 'impostors', label: 'Nombre d’imposteurs', group: 'Joueurs et rôles', official: '1 à 3 (15 joueurs max)' },
   { key: 'killCooldownSec', label: 'Délai entre deux éliminations', unit: 's', official: '45 s', group: 'Éliminations' },
   { key: 'initialKillCooldownSec', label: 'Délai avant la 1re élimination', unit: 's', official: '10 s', group: 'Éliminations' },
-  { key: 'killCodeTtlSec', label: 'Validité d’un code d’élimination', unit: 's', group: 'Éliminations' },
   { key: 'emergencyMeetingsPerPlayer', label: 'Réunions d’urgence par joueur', official: '1', group: 'Réunions' },
   { key: 'emergencyCooldownSec', label: 'Délai du bouton d’urgence', unit: 's', official: '15 s', group: 'Réunions' },
   { key: 'gatherSec', label: 'Temps pour rejoindre la salle', unit: 's', group: 'Réunions' },

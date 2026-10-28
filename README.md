@@ -10,7 +10,7 @@ Un site web gratuit pour jouer à un jeu de rôles cachés **inspiré d’Among 
 
 > Projet de fans, non affilié à Innersloth. Aucun élément graphique, sonore ou textuel du jeu original n’est utilisé.
 
-![Tâches sur téléphone](docs/captures/06-taches-equipage.png)
+![Tâches sur téléphone](docs/captures/10-taches.png)
 
 ---
 
@@ -85,7 +85,7 @@ Les parties en cours ne sont pas perdues (l’état est stocké côté serveur),
 
 ## 4. Organiser une nouvelle partie
 - **Même soirée, mêmes joueurs** : à la fin, le MJ touche **Nouvelle partie** ; tout le monde revient au salon, le terrain et les réglages sont conservés, le lien et l’affiche restent valables.
-- **Nouvelle soirée** : **Créer une nouvelle partie** ; le terrain et les réglages enregistrés sur l’appareil du MJ sont repris automatiquement. Les fiches déjà imprimées restent valables tant que vous ne régénérez pas les postes.
+- **Nouvelle soirée** : **Créer une nouvelle partie** ; le terrain et les réglages enregistrés sur l’appareil du MJ sont repris automatiquement. Les fiches déjà imprimées restent valables tant que vous ne régénérez pas les postes (exception : les bandes « puzzle » imprimées avant la version à deux lettres doivent être réimprimées).
 - **Changer d’appareil de MJ** : « Reprendre une partie sur cet appareil » avec le code de partie et le code maître du jeu ; pour réutiliser le terrain, **Exporter** puis **Importer** le fichier de terrain.
 
 ## 5. Sauvegarde et récupération

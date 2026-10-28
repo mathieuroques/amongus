@@ -10,7 +10,6 @@ export const DEFAULT_SETTINGS: Settings = {
   impostors: 3,
   killCooldownSec: 60, // officiel : 45 s (10–60)
   initialKillCooldownSec: 30, // officiel : 10 s au premier tour
-  killCodeTtlSec: 45,
   emergencyMeetingsPerPlayer: 1, // officiel : 1
   emergencyCooldownSec: 30, // officiel : 15 s
   gatherSec: 90, // n'existe pas dans le jeu vidéo (téléportation)
@@ -32,6 +31,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ghostsSeeRoles: false,
 };
 
+/** Dès que la majorité des vivants est arrivée en réunion, il ne reste au plus que ce délai pour les retardataires. */
+export const GATHER_MAJORITY_SEC = 15;
+
 type NumKey = { [K in keyof Settings]: Settings[K] extends number ? K : never }[keyof Settings];
 
 export const SETTING_BOUNDS: Record<NumKey, [number, number]> = {
@@ -39,7 +41,6 @@ export const SETTING_BOUNDS: Record<NumKey, [number, number]> = {
   impostors: [1, 10],
   killCooldownSec: [10, 600],
   initialKillCooldownSec: [5, 600],
-  killCodeTtlSec: [15, 180],
   emergencyMeetingsPerPlayer: [0, 9],
   emergencyCooldownSec: [0, 300],
   gatherSec: [15, 600],

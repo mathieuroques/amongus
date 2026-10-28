@@ -22,9 +22,9 @@ function useHash(): string {
 export function App() {
   const h = useHash();
   let page;
-  if (h.startsWith('/s/')) {
-    // QR code d'un poste lu avec l'appareil photo du téléphone
-    sessionStorage.setItem('imposteurs.pendingScan', h.slice(3));
+  if (h.startsWith('/s/') || h.startsWith('/c/')) {
+    // QR code d'un poste (/s/) ou d'un corps (/c/) lu avec l'appareil photo du téléphone
+    sessionStorage.setItem('imposteurs.pendingScan', h.startsWith('/c/') ? `c:${h.slice(3)}` : h.slice(3));
     go(sessions.player() ? '/play' : '/');
     page = null;
   } else if (h === '/play') {

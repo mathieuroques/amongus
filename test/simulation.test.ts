@@ -3,7 +3,7 @@
 // les invariants du jeu. But : qu'aucune séquence d'événements ne plante ou ne corrompe une partie.
 import { describe, expect, it } from 'vitest';
 import {
-  addPlayer, aliveCrew, aliveImpostors, createGame, GameError, gmAction, nextWakeup, playerAction, taskProgress, tick, type GmAction, type PlayerAction,
+  addPlayer, aliveCrew, aliveImpostors, createGame, GameError, gmAction, nextWakeup, playerAction, readyCount, taskProgress, tick, type GmAction, type PlayerAction,
 } from '../src/shared/engine';
 import { seededRng, type Rng } from '../src/shared/rng';
 import { exampleTerrain } from '../src/shared/terrain';
@@ -24,7 +24,14 @@ function invariants(s: GameState, now: number) {
     if (total > 0) expect(done).toBeLessThan(total);
     if (s.sabotage?.deadline) expect(s.sabotage.deadline).toBeGreaterThan(now);
   }
-  if (s.phase === 'meeting' && !s.paused) expect(nextWakeup(s, now)).toBeDefined();
+  if (s.phase === 'meeting' && !s.paused) {
+    expect(nextWakeup(s, now)).toBeDefined();
+    const m = s.meeting!;
+    const alive = s.players.filter((p) => !p.left && !p.kicked && p.role && p.alive);
+    // une majorité « prête à voter » ouvre le vote aussitôt ; tous arrivés : la discussion commence aussitôt
+    if (m.stage === 'discussion') expect(2 * readyCount(s, m)).toBeLessThanOrEqual(alive.length);
+    if (m.stage === 'gather' && alive.length > 0) expect(alive.every((p) => p.checkedIn)).toBe(false);
+  }
   for (const p of s.players) {
     for (const t of p.tasks) {
       const def = s.terrain.tasks.find((d) => d.id === t.taskId)!;
@@ -32,16 +39,15 @@ function invariants(s: GameState, now: number) {
       if (t.done) expect(t.step).toBe(def.steps.length);
     }
     if (!p.alive) {
-      expect(p.killCode).toBeUndefined();
       // un fantôme d'équipage peut faire une tâche, mais jamais réparer, ni agir tant que son corps attend
       expect(p.challenge?.purpose).not.toBe('fix');
       if (p.body && !p.body.reported && !p.body.vanished) expect(p.challenge).toBeUndefined();
     }
-    if (p.killCode) expect(p.role).toBe('impostor');
-    if (s.phase !== 'playing') expect(p.killCode).toBeUndefined();
+    if (p.disputed) expect(p.deathCause === 'killed' || p.alive === false).toBe(true);
+    if (p.lastStationId) expect(s.terrain.stations.some((x) => x.id === p.lastStationId)).toBe(true);
   }
   if (s.sabotage) for (const h of s.sabotage.holds) expect(s.players.find((p) => p.id === h.playerId)?.alive).toBe(true);
-  const codes = s.players.flatMap((p) => [p.killCode?.code, p.body && !p.body.reported && !p.body.vanished ? p.body.code : undefined]).filter(Boolean);
+  const codes = s.players.flatMap((p) => [p.body && !p.body.reported && !p.body.vanished ? p.body.code : undefined]).filter(Boolean);
   expect(new Set(codes).size).toBe(codes.length);
 }
 
@@ -82,6 +88,7 @@ function playerMove(s: GameState, pid: string, r: Rng, now: number): PlayerActio
   }
   if (s.phase === 'meeting') {
     if (s.meeting?.stage === 'gather' && roll < 60) return { type: 'checkIn' };
+    if (s.meeting?.stage === 'discussion' && roll < 40) return { type: 'readyVote' };
     if (s.meeting?.stage === 'voting') {
       const alive = s.players.filter((x) => x.alive && !x.left && x.role);
       const imps = alive.filter((x) => x.role === 'impostor');
@@ -91,14 +98,14 @@ function playerMove(s: GameState, pid: string, r: Rng, now: number): PlayerActio
     }
   }
   if (p.role === 'impostor') {
-    if (p.killCode && roll < 40) {
-      const victim = pick(r, s.players.filter((x) => x.alive && x.role === 'crewmate'));
-      if (victim) return { type: 'killed', code: p.killCode.code, as: victim.id } as never;
+    if (roll < 14) {
+      // souvent un équipier vivant, parfois n'importe qui (allié, mort, parti, soi-même, inconnu)
+      const victim = r.int(4) ? pick(r, s.players.filter((x) => x.alive && x.role === 'crewmate')) : pick(r, s.players);
+      return { type: 'kill', target: r.int(20) ? victim?.id ?? 'x' : 'inconnu' };
     }
-    if (roll < 12) return { type: 'arm' };
-    if (roll < 18) return { type: 'sabotage', kind: pick(r, SAB)! };
-    if (roll < 20) return { type: 'disarm' };
+    if (roll < 20) return { type: 'sabotage', kind: pick(r, SAB)! };
   }
+  if (!p.alive && roll < 3) return { type: 'dispute' };
   if (roll < 4) {
     const body = pick(r, s.players.filter((x) => x.body && !x.body.reported && !x.body.vanished));
     return { type: 'report', code: body && r.int(3) ? body.body!.code : String(r.int(10000)).padStart(4, '0') };
@@ -118,7 +125,9 @@ function playerMove(s: GameState, pid: string, r: Rng, now: number): PlayerActio
     { type: 'scan', code: r.int(2) ? st('task') : 'QQQQ' },
     { type: 'scan', code: st('vitals') },
     { type: 'cancelChallenge' },
-    { type: 'killed', code: String(r.int(10000)) },
+    { type: 'kill', target: pick(r, s.players)?.id ?? 'x' },
+    { type: 'readyVote' },
+    { type: 'dispute' },
     { type: 'vote', target: 'skip' },
     { type: 'checkIn' },
     { type: 'alert', message: 'test' },
@@ -205,10 +214,11 @@ function simulate(seed: number, n: number, steps: number) {
         } else gmAction(s, gmMove(s, r), ctx());
       } else {
         const actor = pick(r, s.players.filter((p) => !p.kicked))!;
-        const a = playerMove(s, actor.id, r, now) as PlayerAction & { as?: string };
-        // un « killed » est saisi par la victime (et non par l'imposteur qui montre le code)
-        if (a.type === 'killed' && a.as) playerAction(s, a.as, { type: 'killed', code: a.code }, ctx());
-        else playerAction(s, actor.id, a, ctx());
+        const before = taskProgress(s).done;
+        const a = playerMove(s, actor.id, r, now);
+        playerAction(s, actor.id, a, ctx());
+        // une tâche simulée par un imposteur ne fait jamais avancer la barre de l'équipage
+        if (actor.role === 'impostor' && a.type === 'submit') expect(taskProgress(s).done).toBe(before);
       }
     } catch (e) {
       if (!(e instanceof GameError)) throw e;
@@ -227,11 +237,13 @@ describe(`simulation aléatoire du moteur (${GAMES} séries de parties, 4 à 40 
   const all: string[] = [];
   let refused = 0;
   for (let b = 0; b < GAMES / BATCH; b++) {
-    it(`séries ${b * BATCH + 1} à ${(b + 1) * BATCH} : aucune erreur inattendue, invariants toujours respectés`, () => {
+    it(`séries ${b * BATCH + 1} à ${(b + 1) * BATCH} : aucune erreur inattendue, invariants toujours respectés`, async () => {
       for (let seed = b * BATCH + 1; seed <= (b + 1) * BATCH; seed++) {
         const res = simulate(seed, 4 + (seed % 37), 900);
         all.push(...res.outcomes);
         refused += res.errors;
+        // rend la main entre deux séries : le processus de test reste joignable (sinon délai RPC de vitest dépassé)
+        await new Promise((r) => setTimeout(r, 0));
       }
     }, 120_000);
   }

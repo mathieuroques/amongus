@@ -4,7 +4,7 @@
 // les votes individuels avant la révélation, ni le journal secret.
 
 import { GAMES, SABOTAGE_INFO } from './catalog';
-import { bodyPending, challengeView, gmChallengeView, inGame, taskProgress, type ChallengeView } from './engine';
+import { bodyPending, challengeView, gmChallengeView, inGame, readyCount, taskProgress, type ChallengeView } from './engine';
 import { availableSabotages } from './terrain';
 import type {
   GameState, LogEntry, Meeting, MeetingStage, Passage, Phase, PlayerState, Role, Room, SabotageKind, SafetyAlert, Settings,
@@ -31,6 +31,8 @@ export interface MyTask {
   step: number;
   done: boolean;
   next?: { stationName: string; roomName: string; floor: string; gameLabel: string };
+  /** Distance au poste de la dernière tâche réussie : 0 même pièce, 1 même étage, 2 ailleurs (absent au début). */
+  near?: 0 | 1 | 2;
 }
 
 export interface SabotageView {
@@ -53,6 +55,9 @@ export interface MeetingView {
   myVote?: string;
   checkedInCount: number;
   aliveCount: number;
+  /** Vivants « prêts à voter » pendant la discussion. */
+  readyCount: number;
+  myReady: boolean;
   result?: VoteResult & { ejectedName?: string };
   endedSabotage?: string;
 }
@@ -121,11 +126,15 @@ export interface PlayerView {
     left: boolean;
     deathCause?: string;
     killedByName?: string;
+    /** La mort a-t-elle été annoncée à tous (réunion ou éjection) ? Le badge FANTÔME ne se porte qu'à partir de là. */
+    deathRevealed: boolean;
+    disputed: boolean;
     tasks?: MyTask[];
+    /** Prochaine étape conseillée (la plus proche de la dernière tâche faite, sinon l'ordre personnel). */
+    nextTaskId?: string;
     tasksHidden: boolean;
     emergencyLeft: number;
     killCooldownUntil?: number;
-    killCode?: { code: string; expiresAt: number };
     body?: { code: string; reported: boolean; vanished: boolean; vanishAt?: number };
     bodyPending: boolean;
     challenge?: ChallengeView;
@@ -163,7 +172,6 @@ export interface GmPlayer {
   tasks: { taskId: string; name: string; type: TaskType; step: number; steps: number; done: boolean }[];
   emergencyLeft: number;
   killCooldownUntil: number;
-  armed: boolean;
   kills: number;
   checkedIn: boolean;
   blockedUntil: number;
@@ -204,6 +212,8 @@ const nameOf = (s: GameState, id?: string) => (id === 'skip' ? 'Passer' : s.play
 const realStatus = (p: PlayerState): Status => (p.left ? 'left' : p.alive ? 'alive' : 'dead');
 
 function taskList(s: GameState, p: PlayerState): MyTask[] {
+  const last = p.lastStationId ? s.terrain.stations.find((x) => x.id === p.lastStationId) : undefined;
+  const lastFloor = last ? s.terrain.rooms.find((r) => r.id === last.roomId)?.floor ?? '' : '';
   return p.tasks.map((a) => {
     const def = s.terrain.tasks.find((t) => t.id === a.taskId)!;
     const step = def.steps[a.step];
@@ -217,8 +227,19 @@ function taskList(s: GameState, p: PlayerState): MyTask[] {
       step: a.step,
       done: a.done,
       next: step && st ? { stationName: st.name, roomName: room?.name ?? '', floor: room?.floor ?? '', gameLabel: GAMES[step.game].label } : undefined,
+      near: last && st && !a.done ? (st.roomId === last.roomId ? 0 : lastFloor && room?.floor === lastFloor ? 1 : 2) : undefined,
     };
   });
+}
+
+/** Prochaine étape conseillée : la plus proche (même pièce, puis même étage), à égalité l'ordre personnel du joueur. */
+export function suggestNext(tasks: MyTask[]): string | undefined {
+  let best: MyTask | undefined;
+  for (const t of tasks) {
+    if (t.done) continue;
+    if (!best || (t.near ?? 2) < (best.near ?? 2)) best = t;
+  }
+  return best?.taskId;
 }
 
 function sabotageView(s: GameState, now: number): SabotageView | undefined {
@@ -256,6 +277,8 @@ function meetingView(s: GameState, viewer?: PlayerState): MeetingView | undefine
     myVote: viewer ? m.votes[viewer.id] : undefined,
     checkedInCount: alive.filter((p) => p.checkedIn).length,
     aliveCount: alive.length,
+    readyCount: readyCount(s, m),
+    myReady: !!viewer && (m.ready ?? []).includes(viewer.id),
     result: m.stage === 'result' && m.result ? { ...m.result, ejectedName: m.result.ejectedId ? nameOf(s, m.result.ejectedId) : undefined } : undefined,
     endedSabotage: m.endedSabotage ? SABOTAGE_INFO[m.endedSabotage].label : undefined,
   };
@@ -326,7 +349,8 @@ export function viewForPlayer(s: GameState, playerId: string, now: number): Play
     .map((p) => {
       let status: Status = 'alive';
       if (p.left) status = 'left';
-      else if (!p.alive && (p.id === me.id || p.deathRevealed || seeAllDeaths)) status = 'dead';
+      // l'imposteur sait qui il vient d'éliminer (sa victime disparaît de sa liste) ; les autres l'apprennent à la réunion
+      else if (!p.alive && (p.id === me.id || p.deathRevealed || seeAllDeaths || (isImp && p.killedBy === me.id))) status = 'dead';
       let role: Role | undefined;
       if (started && (p.id === me.id || seeAllRoles || (isImp && p.role === 'impostor'))) role = p.role;
       const out: PublicPlayer = { id: p.id, name: p.name, num: p.num, status, role };
@@ -347,6 +371,7 @@ export function viewForPlayer(s: GameState, playerId: string, now: number): Play
   // Pendant « Communications coupées », un joueur vivant ne voit plus sa liste de tâches
   // (imposteurs compris, pour que leur écran reste identique à celui d'un équipier).
   const tasksHidden = started && comms && me.alive;
+  const myTasks = started && !tasksHidden ? taskList(s, me) : undefined;
   const view: PlayerView = {
     kind: 'player',
     now,
@@ -367,11 +392,13 @@ export function viewForPlayer(s: GameState, playerId: string, now: number): Play
       left: me.left,
       deathCause: me.deathCause,
       killedByName: me.killedBy ? nameOf(s, me.killedBy) : undefined,
-      tasks: started && !tasksHidden ? taskList(s, me) : undefined,
+      deathRevealed: me.deathRevealed,
+      disputed: !!me.disputed,
+      tasks: myTasks,
+      nextTaskId: myTasks ? suggestNext(myTasks) : undefined,
       tasksHidden,
       emergencyLeft: me.emergencyLeft,
       killCooldownUntil: isImp ? me.killCooldownUntil : undefined,
-      killCode: isImp && me.killCode && me.killCode.expiresAt > now ? me.killCode : undefined,
       body: me.body && !me.alive ? { code: me.body.code, reported: me.body.reported, vanished: me.body.vanished, vanishAt: me.body.vanishAt } : undefined,
       bodyPending: bodyPending(me),
       challenge: me.challenge ? challengeView(s, me.challenge) : undefined,
@@ -429,7 +456,6 @@ export function viewForGm(s: GameState, now: number, connected: Set<string>): Gm
       }),
       emergencyLeft: p.emergencyLeft,
       killCooldownUntil: p.killCooldownUntil,
-      armed: !!p.killCode && p.killCode.expiresAt > now,
       kills: p.kills,
       checkedIn: p.checkedIn,
       blockedUntil: p.blockedUntil,

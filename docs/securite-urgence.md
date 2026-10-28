@@ -8,9 +8,9 @@ La sécurité des participants passe avant le jeu. Ces règles s’appliquent à
 3. **Zones interdites** (affiches rouges) : personne n’y entre, même pour se cacher ou poursuivre quelqu’un.
 4. **Aucun contact physique brusque ou non consenti.** L’élimination = tape légère sur l’épaule ou le bras, ou version « sans contact » à portée de bras.
 5. Aucun objet dangereux, aucune manipulation des installations réelles (électricité, gaz, chauffage, eau). Les postes « Énergie » et « Radio » sont fictifs et ne sont jamais placés près d’un vrai tableau électrique.
-6. Pas d’obscurité imposée : les lumières restent allumées dans les zones de jeu. Les sabotages n’agissent que sur les téléphones.
+6. Pas d’obscurité imposée : les lumières restent allumées dans les zones de jeu. Les sabotages n’agissent que sur les téléphones — y compris la « panne de courant » : on ne coupe **jamais** le disjoncteur ni les lumières (risque de chute dans les escaliers, appareils et alarmes coupés).
 7. Cachettes uniquement là où le MJ l’autorise : jamais dans un placard fermé, un coffre, un endroit sans air ou en hauteur.
-8. Aucune donnée personnelle demandée ; aucun enregistrement audio, vidéo ou de position. La caméra ne sert qu’à lire les QR codes, à la demande.
+8. Aucune donnée personnelle demandée ; aucun enregistrement audio, vidéo ou de position. La caméra ne s’allume que sur l’onglet « Poste », ne sert qu’à lire les QR codes (rien n’est enregistré ni envoyé) et se met en pause après une minute sans lecture.
 9. Chacun peut quitter la partie quand il veut, sans justification.
 
 ## Présentation obligatoire avant le démarrage (par le MJ)

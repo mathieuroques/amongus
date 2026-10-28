@@ -3,7 +3,7 @@
 
 import { useState } from 'preact/hooks';
 import { GAMES, SABOTAGE_INFO } from '../shared/catalog';
-import { assemblePuzzle, countPuzzle } from '../shared/puzzles';
+import { assemblePuzzle, countPuzzle, ROW_LABELS } from '../shared/puzzles';
 import type { Station, Terrain } from '../shared/types';
 import type { GmView } from '../shared/view';
 import type { Connection } from './net';
@@ -114,15 +114,36 @@ function StationSheet({ s, t }: { s: Station; t: Terrain }) {
 
 function CountBlock({ seed, name }: { seed: number; name: string }) {
   const p = countPuzzle(seed);
+  const rows = Array.from({ length: p.rows }, (_, r) => p.grid.slice(r * p.cols, (r + 1) * p.cols));
   return (
     <div style={{ border: '2px solid #000', padding: '4mm', marginTop: '4mm' }}>
       <strong>Énigme « {name} » — inventaire</strong>
-      <p>La question s’affiche sur votre téléphone. Comptez sur cette grille :</p>
-      <div class="grid-sym">
-        {p.grid.map((g, i) => (
-          <span key={i}>{g}</span>
-        ))}
-      </div>
+      <p>La question s’affiche sur votre téléphone et change à chaque fois (quel symbole, sur toute la grille ou sur une moitié). Comptez sur cette grille :</p>
+      <table class="count-grid">
+        <thead>
+          <tr>
+            <th />
+            {rows[0].map((_, c) => (
+              <th key={c} class={c === p.cols / 2 ? 'vsplit' : ''}>
+                {c + 1}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, r) => (
+            <tr key={r} class={r === p.rows / 2 ? 'hsplit' : ''}>
+              <th>{ROW_LABELS[r]}</th>
+              {row.map((g, c) => (
+                <td key={c} class={c === p.cols / 2 ? 'vsplit' : ''}>
+                  {g}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <small>Les traits épais séparent les moitiés : haut (A à C) / bas (D à F), gauche (1 à 4) / droite (5 à 8).</small>
     </div>
   );
 }
@@ -132,12 +153,16 @@ function AssembleBlock({ seed, name }: { seed: number; name: string }) {
   return (
     <div style={{ border: '2px solid #000', padding: '4mm', marginTop: '4mm' }}>
       <strong>Énigme « {name} » — puzzle</strong>
-      <p>Découpez les bandes le long des pointillés et posez-les en vrac sur le poste. Les joueurs les rangent dans l’ordre du nombre de points (1 point, 2 points…), lisent le mot obtenu, le saisissent sur leur téléphone, puis remélangent les bandes.</p>
+      <p>
+        Découpez les bandes le long des pointillés et posez-les en vrac sur le poste. Les joueurs les rangent dans l’ordre du nombre de points (1 point, 2 points…), lisent la ligne
+        demandée par leur téléphone (lettres du HAUT ou lettres du BAS : deux mots différents), la saisissent, puis remélangent les bandes.
+      </p>
       <div class="strips">
         {p.pieces.map((piece, i) => (
           <div class="strip" key={i}>
-            {piece.letter}
-            <div style={{ fontSize: '9pt', fontWeight: 400 }}>{'·'.repeat(piece.index + 1)}</div>
+            <span class="top">{piece.letter}</span>
+            <span class="dots">{'·'.repeat(piece.index + 1)}</span>
+            <span class="bottom">{piece.bottom}</span>
           </div>
         ))}
       </div>
@@ -209,7 +234,7 @@ function GhostSheet() {
   return (
     <section class="sheet">
       <h1>Badges fantômes</h1>
-      <p>À découper. Un joueur mort accroche son badge bien en vue (pince, ruban) dès qu’il devient fantôme libre. Les vivants ignorent les fantômes.</p>
+      <p>À découper. Un joueur mort accroche son badge bien en vue (pince, ruban) seulement quand sa mort est annoncée (à la réunion qui suit, ou dès son éjection). Avant, il reste discret et silencieux, sans badge. Les vivants ignorent les fantômes.</p>
       <div class="badges">
         {Array.from({ length: 12 }, (_, i) => (
           <div key={i}>👻 FANTÔME</div>
@@ -232,22 +257,22 @@ function SummarySheet({ v }: { v: GmView }) {
           <strong>Imposteurs ({s.impostors})</strong> : éliminer et saboter sans être démasqués. Victoire : autant d’imposteurs que d’équipiers vivants, ou sabotage critique non réparé.
         </li>
         <li>
-          <strong>Élimination</strong> : l’imposteur touche l’épaule et montre son code à 4 chiffres ; la victime le saisit (onglet Urgence). Délai : {s.killCooldownSec} s (premier : {s.initialKillCooldownSec} s). Jamais dans un escalier ou un passage.
+          <strong>Élimination</strong> : l’imposteur touche l’épaule (ou se place à portée de bras) puis choisit le pseudonyme de sa victime sur son téléphone ; la victime n’a rien à saisir et peut contester auprès du MJ. Délai : {s.killCooldownSec} s (premier : {s.initialKillCooldownSec} s). Jamais dans un escalier ou un passage.
         </li>
         <li>
-          <strong>Corps</strong> : la victime s’assoit sur place, silencieuse, téléphone montrant son code de corps. Celui qui la trouve saisit ce code (onglet Urgence) → réunion.
+          <strong>Corps</strong> : la victime s’assoit sur place, silencieuse, téléphone montrant son code de corps en très gros et un QR code. Celui qui la trouve scanne ce QR code (onglet Poste) ou tape le code (onglet Urgence) → réunion.
         </li>
         <li>
           <strong>Réunion d’urgence</strong> : au bouton d’urgence ({s.emergencyMeetingsPerPlayer} par joueur, impossible pendant un sabotage).
         </li>
         <li>
-          <strong>Réunion</strong> : rassemblement ({s.gatherSec} s), discussion ({s.discussionSec} s), vote ({s.votingSec} s). Vote pour un joueur ou « passer ». Égalité ou « passer » majoritaire : personne n’est éjecté. {s.confirmEjects ? 'Le rôle de l’éjecté est annoncé.' : 'Le rôle de l’éjecté n’est pas annoncé.'} {s.anonymousVotes ? 'Votes anonymes.' : 'Votes visibles après le décompte.'}
+          <strong>Réunion</strong> : rassemblement ({s.gatherSec} s, 15 s de plus seulement une fois la majorité arrivée), discussion ({s.discussionSec} s, ou moins si la majorité touche « Prêt à voter »), vote ({s.votingSec} s). Vote pour un joueur ou « passer ». Égalité ou « passer » majoritaire : personne n’est éjecté. {s.confirmEjects ? 'Le rôle de l’éjecté est annoncé.' : 'Le rôle de l’éjecté n’est pas annoncé.'} {s.anonymousVotes ? 'Votes anonymes.' : 'Votes visibles après le décompte.'}
         </li>
         <li>
-          <strong>Fantômes</strong> : silence total avec les vivants, badge visible. L’équipage fantôme finit ses tâches ; l’imposteur fantôme peut saboter. Pas de vote, pas de signalement, pas de réparation.
+          <strong>Fantômes</strong> : silence total avec les vivants, badge visible dès l’annonce de la mort. L’équipage fantôme finit ses tâches ; l’imposteur fantôme peut saboter. Pas de vote, pas de signalement, pas de réparation.
         </li>
         <li>
-          <strong>Sabotages</strong> : réacteur ({s.reactorSec} s, 2 personnes en même temps), oxygène ({s.oxygenSec} s, 2 postes), panne de courant (postes de tâches hors service), communications (liste des tâches masquée).
+          <strong>Sabotages</strong> : réacteur ({s.reactorSec} s, 2 personnes en même temps), oxygène ({s.oxygenSec} s, 2 postes), panne de courant (impossible de signaler un corps), communications (liste des tâches masquée).
         </li>
         <li>
           <strong>Sécurité</strong> : on ne court jamais, aucune porte verrouillée, zones interdites respectées, aucun contact brusque. Bouton « Alerte sécurité » dans l’onglet Urgence. Le maître du jeu peut tout arrêter.

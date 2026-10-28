@@ -22,8 +22,8 @@ export const GAMES: Record<GameKind, GameInfo> = {
   scan: { label: 'Scan médical', hint: 'Restez immobile sur la marque au sol pendant le scan.', minMs: 10000, visual: true },
   swipe: { label: 'Badge d’accès', hint: 'Faites glisser le badge d’un trait, ni trop vite ni trop lentement.', minMs: 2000 },
   targets: { label: 'Nettoyage', hint: 'Touchez toutes les cibles qui apparaissent.', minMs: 4000 },
-  count: { label: 'Inventaire (fiche papier)', hint: 'Comptez le symbole demandé sur la fiche affichée au poste.', minMs: 3000, paper: true },
-  assemble: { label: 'Puzzle (fiche papier)', hint: 'Rangez les bandes découpées du poste dans l\u2019ordre du nombre de points, lisez le mot obtenu puis remélangez les bandes.', minMs: 5000, paper: true },
+  count: { label: 'Inventaire (fiche papier)', hint: 'Comptez le symbole demandé, dans la zone demandée, sur la grille de la fiche du poste.', minMs: 3000, paper: true },
+  assemble: { label: 'Puzzle (fiche papier)', hint: 'Rangez les bandes découpées du poste dans l\u2019ordre du nombre de points, lisez la ligne demandée (haut ou bas) puis remélangez les bandes.', minMs: 5000, paper: true },
 };
 
 export const FIXES: Record<FixKind, GameInfo> = {
@@ -62,7 +62,7 @@ export const SABOTAGE_INFO: Record<SabotageKind, { label: string; critical: bool
   lights: {
     label: 'Panne de courant',
     critical: false,
-    short: 'Les postes de tâches de l’équipage sont hors service. Réparez au poste Énergie.',
+    short: 'Dans le noir, impossible de signaler un corps (et le bouton d’urgence est bloqué). Les tâches continuent. Réparez au poste Énergie.',
   },
   comms: {
     label: 'Communications coupées',
@@ -75,5 +75,5 @@ export const SYMBOLS = ['▲', '●', '■', '★', '♦', '✚'] as const;
 export const SYMBOL_NAMES = ['triangles', 'ronds', 'carrés', 'étoiles', 'losanges', 'croix'] as const;
 export const ASSEMBLE_WORDS = [
   'NAVIRE', 'FUSEE', 'ORBITE', 'COMETE', 'GALAXIE', 'METEORE', 'SATURNE', 'PLANETE', 'CAPSULE', 'MODULE',
-  'ETOILE', 'ANTENNE', 'RADAR', 'SONDE', 'NEBULEUSE', 'ECLIPSE', 'BOUSSOLE', 'LANTERNE', 'CRISTAL', 'TURBINE',
+  'ETOILE', 'ANTENNE', 'RADAR', 'SONDE', 'NEPTUNE', 'ECLIPSE', 'BOUSSOLE', 'LANTERNE', 'CRISTAL', 'TURBINE',
 ];

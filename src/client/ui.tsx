@@ -131,7 +131,7 @@ export function NetBadge({ status }: { status: NetStatus }) {
   );
 }
 
-export function OfflineBanner({ status }: { status: NetStatus }) {
+export function OfflineBanner({ status, waiting = 0 }: { status: NetStatus; waiting?: number }) {
   const [show, setShow] = useState(false);
   // on évite le clignotement lors des micro-coupures : bandeau après 1,5 s
   useEffect(() => {
@@ -139,6 +139,13 @@ export function OfflineBanner({ status }: { status: NetStatus }) {
     const t = setTimeout(() => setShow(true), 1500);
     return () => clearTimeout(t);
   }, [status]);
+  // une action attend la reconnexion : on le dit tout de suite
+  if (waiting > 0 && status !== 'online')
+    return (
+      <div class="offline-banner waiting" role="status">
+        <span class="spinner" /> Reconnexion… votre action part dès que la connexion revient.
+      </div>
+    );
   if (!show || status === 'online') return null;
   return (
     <div class="offline-banner" role="alert">
@@ -302,6 +309,7 @@ export function Reveal({ children, label }: { children: ComponentChildren; label
 /** Garde l'écran allumé pendant la partie (si le navigateur le permet). */
 let wakeLock: { release: () => Promise<void> } | undefined;
 const wakeStore = new Store<{ on: boolean }>({ on: false });
+export const wakeLockOn = () => wakeStore.get().on;
 export async function setWakeLock(on: boolean): Promise<boolean> {
   try {
     const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };

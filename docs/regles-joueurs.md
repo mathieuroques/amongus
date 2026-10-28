@@ -25,33 +25,35 @@ Aucune installation n’est nécessaire (vous pouvez « ajouter à l’écran d�
 
 ## 3. L’application
 Quatre onglets, identiques pour tous les rôles :
-- **Tâches** : votre liste (pièce et poste de chaque étape) et la progression de l’équipage.
-- **Poste** : scannez le QR code d’un poste (ou tapez son code) pour y agir.
-- **Urgence** : signaler un corps, déclarer que vous avez été éliminé·e, alerte sécurité, quitter.
-- **Rôle** : votre rôle (masqué par défaut), et pour les imposteurs les éliminations, sabotages et conduits.
+- **Tâches** : la **prochaine étape** conseillée (la plus proche de votre dernière tâche : même pièce, puis même étage), votre liste (pièce et poste de chaque étape) et la progression de l’équipage.
+- **Poste** : la caméra s’ouvre d’elle-même ; visez le QR code d’un poste (ou tapez son code) pour y agir, ou le QR code affiché par le téléphone d’un corps pour le signaler.
+- **Urgence** : signaler un corps, réunion d’urgence, alerte sécurité, quitter.
+- **Rôle** : deux voiles identiques pour tous — « Actions » (pour les imposteurs : éliminations, sabotages, conduits) et « Mon rôle » (votre carte de rôle).
 
 **Alertes** : réunions, sabotages critiques et arrêt d’urgence s’affichent en plein écran avec un son (et une vibration sur Android). Dans le salon, réglez votre téléphone avec la carte « Alertes de ce téléphone » : tester le son, activer les notifications pour l’écran verrouillé (sur iPhone : ajouter d’abord le jeu à l’écran d’accueil), garder l’écran allumé. Le MJ annonce aussi les réunions à voix haute. Détails : `alertes-notifications.md`.
 
 ## 4. Les tâches
 - Chaque joueur reçoit **1 tâche commune** (la même pour tout le monde), **1 tâche longue** (deux étapes dans deux pièces différentes) et **2 tâches courtes**.
-- Pour faire une tâche : marchez jusqu’au poste indiqué, scannez son QR code, choisissez la tâche, réussissez le mini-jeu sur votre téléphone ou l’énigme imprimée sur la fiche (compter des symboles, remettre des bandes de papier dans l’ordre).
-- Une étape n’est validée que si le serveur l’accepte (message « Tâche terminée ✔ »). Une tâche ne compte qu’une fois.
+- L’ordre de vos tâches vous est propre (la tâche commune n’est jamais la première) : tout le monde ne part pas au même poste.
+- Pour faire une tâche : marchez jusqu’au poste indiqué, touchez la carte « Prochaine étape » (la caméra s’ouvre), visez le QR code. S’il n’y a qu’une tâche pour vous à ce poste, le mini-jeu s’ouvre aussitôt ; sinon, choisissez-la. Réussissez le mini-jeu sur votre téléphone ou l’énigme imprimée sur la fiche (compter des symboles, remettre des bandes de papier dans l’ordre) : **la question change à chaque fois**, inutile de retenir les réponses.
+- Une étape n’est validée que si le serveur l’accepte (message « Tâche terminée ! » ou « Étape validée ! »). L’application affiche alors directement la prochaine étape. Une tâche ne compte qu’une fois.
 - **Scan médical** : c’est une tâche *visuelle*. Pendant le scan, l’écran de l’équipier devient un grand panneau vert animé visible de loin. Le téléphone d’un imposteur ne l’affiche jamais : un scan vert observé innocente son auteur.
-- Les imposteurs ont une liste de tâches **factices** : ils peuvent jouer les mini-jeux, mais rien ne compte.
+- Les imposteurs ont une liste de tâches **factices** : leur téléphone se comporte exactement comme celui d’un équipier (mêmes messages, liste qui avance), mais la barre de l’équipage ne bouge pas.
 - La barre de progression de l’équipage avance à chaque tâche terminée (y compris celles des fantômes).
 - Interdit : photographier ou recopier les codes des postes pour les utiliser à distance, déplacer les fiches.
 
 ## 5. Les éliminations
 - Seul un **imposteur vivant** peut éliminer, et seulement lorsque son délai est écoulé (**30 s** au début de la partie, puis **60 s** après chaque élimination et après chaque réunion).
-- L’imposteur prépare un **code d’élimination** à 4 chiffres (valable 45 s), touche légèrement l’épaule de sa victime et lui montre le code.
-- La victime ouvre **Urgence → Un imposteur vous a éliminé·e ?** et saisit le code **immédiatement**. Refuser ou tarder est interdit.
-- Interdit : éliminer dans un escalier, une zone de passage ou une zone interdite ; transmettre son code autrement qu’en le montrant en personne ; éliminer pendant une réunion.
-- Un code ne sert qu’une fois. On ne peut pas éliminer un mort, ni un imposteur.
+- L’imposteur touche légèrement l’épaule de sa victime (ou se place à portée de bras pour un joueur « sans contact ») et murmure « éliminé·e », puis choisit **son pseudonyme** dans **Rôle → Actions** et touche **Valider**. La victime **n’a rien à saisir** : son téléphone vibre et passe tout seul en écran « corps ».
+- La victime s’assoit aussitôt, même si elle n’a pas encore regardé son téléphone.
+- Interdit : éliminer dans un escalier, une zone de passage ou une zone interdite ; éliminer à distance (sans être à portée de bras) ; éliminer pendant une réunion.
+- On ne peut pas éliminer un mort, ni un imposteur. Une victime qui n’a pas été touchée touche **« Je n’ai pas été touché·e (contester) »** : le MJ est prévenu, écoute les deux joueurs en privé et peut annuler l’élimination.
 
 ## 6. Les corps
-- La victime **s’assoit calmement sur place** (à quelques pas d’un escalier ou d’un passage si besoin), silencieuse et immobile, téléphone affichant son **code de corps**.
-- Un joueur vivant qui trouve un corps ouvre **Urgence → Signaler le corps** et saisit le code affiché : une réunion commence pour tout le monde.
-- Si personne ne trouve le corps en **3 minutes**, il « disparaît » : la victime devient un fantôme libre (sans rien dire à personne).
+- La victime **s’assoit calmement sur place** (à quelques pas d’un escalier ou d’un passage si besoin), silencieuse et immobile, écran tourné vers l’extérieur : il affiche son **code de corps en très gros** (lisible de loin) et un **QR code** (l’écran reste allumé).
+- Un joueur vivant qui trouve un corps vise ce QR code avec l’onglet **Poste**, ou tape le code dans **Urgence → J’ai trouvé un corps**, puis confirme : une réunion commence pour tout le monde.
+- Pendant une **panne de courant**, personne ne peut signaler de corps (« dans le noir, on ne voit rien ») : il faut d’abord réparer au poste Énergie.
+- Si personne ne trouve le corps en **3 minutes**, il « disparaît » : la victime devient un fantôme, **sans badge** jusqu’à la réunion suivante (sa mort n’est pas encore connue).
 - À chaque réunion, tous les corps non signalés disparaissent et **tous les morts sont annoncés**.
 
 ## 7. Les réunions
@@ -61,8 +63,8 @@ Une réunion commence quand :
 - le MJ en convoque une.
 
 Déroulement (tout s’arrête : aucune tâche, aucune élimination, aucun sabotage) :
-1. **Rassemblement** (90 s max) : tout le monde rejoint la salle de réunion **en marchant**, puis touche « Je suis arrivé·e ». Quand tous les vivants sont là, on passe à la suite.
-2. **Discussion** (90 s) : qui était où ? qu’avez-vous vu ?
+1. **Rassemblement** (90 s max) : tout le monde rejoint la salle de réunion **en marchant**, puis touche « Je suis arrivé·e ». Quand tous les vivants sont là, on passe à la suite ; **dès que la majorité est arrivée, les retardataires n’ont plus que 15 s**.
+2. **Discussion** (90 s max) : qui était où ? qu’avez-vous vu ? Quand vous avez tout dit, touchez **« Prêt à voter »** : le vote s’ouvre dès que la majorité des vivants est prête.
 3. **Vote** (90 s) : chaque joueur vivant vote pour un joueur vivant ou **passe**. Un vote est **définitif**. Ne pas voter = abstention. On voit qui a déjà voté, pas pour qui. Le vote se termine dès que tous les vivants ont voté.
 4. **Résultat** : le joueur qui a **le plus de voix** est éjecté, à condition d’avoir plus de voix que « passer ». En cas d’**égalité** (entre joueurs, ou avec « passer »), si « passer » l’emporte ou si personne ne vote : **personne n’est éjecté**. L’application annonce si l’éjecté **était un imposteur** et combien il en reste, puis affiche le détail des votes.
 5. La partie reprend automatiquement. Les délais d’élimination et du bouton d’urgence repartent à zéro.
@@ -76,7 +78,7 @@ Un seul sabotage à la fois ; délai commun à tous les imposteurs : 10 s au dé
 |---|---|---|
 | **Fusion du réacteur** (critique, 75 s) | Alarme sur tous les téléphones. Si le compte à rebours arrive à zéro, **les imposteurs gagnent**. | Deux joueurs vivants **différents** maintiennent en même temps le bouton des **deux postes Réacteur** (environ 3 s ensemble). |
 | **Fuite d’oxygène** (critique, 90 s) | Idem. | Aux **deux postes Oxygène** : scanner le poste et recopier le code affiché (une ou plusieurs personnes). |
-| **Panne de courant** | Les postes de tâches sont hors service pour tous les vivants. | Au poste **Énergie (fictif)** : remettre les 5 interrupteurs sur MARCHE. |
+| **Panne de courant** | « Dans le noir », **impossible de signaler un corps** (et, comme pour tout sabotage, le bouton d’urgence est bloqué). Les tâches continuent, même celles en cours. Les lumières de la maison restent **allumées** : la panne est seulement dans l’application. | Au poste **Énergie (fictif)** : remettre les 5 interrupteurs sur MARCHE. |
 | **Communications coupées** | Liste des tâches, barre de progression et moniteur de vie masqués pour les vivants. On peut encore faire une tâche si on se souvient de son poste. | Au poste **Radio** : aligner les deux ondes. |
 
 ## 9. Le moniteur de vie
@@ -84,7 +86,7 @@ Le poste « Moniteur de vie » montre qui est vivant ou mort à l’instant pré
 
 ## 10. Les fantômes
 Un joueur éliminé ou éjecté devient **fantôme** :
-- **Silence total** avec les vivants : ni parole, ni geste, ni mimique, ni message. Il porte le badge « FANTÔME ».
+- **Silence total** avec les vivants : ni parole, ni geste, ni mimique, ni message. Il accroche le badge « FANTÔME » **quand sa mort est annoncée** (à la réunion qui suit, ou tout de suite s’il est éjecté) ; avant, il reste discret, sans badge, et ne répond à personne.
 - Il ne vote pas, ne signale pas, ne convoque pas de réunion, ne répare pas les sabotages.
 - **Fantôme d’équipage** : il doit finir ses tâches (elles comptent pour la victoire), une fois son corps découvert ou disparu.
 - **Fantôme imposteur** : il peut encore saboter, mais plus éliminer ni utiliser les conduits.
@@ -106,4 +108,5 @@ Le MJ peut définir des **conduits** : des itinéraires sûrs que **seuls les im
 - Mentir est permis à tout le monde.
 - La victime ne révèle jamais l’identité de son assassin, ni à voix haute, ni par signe.
 - Codes erronés répétés : l’application vous bloque une minute et le MJ en est informé.
+- Le téléphone d’un imposteur vibre brièvement quand il peut de nouveau éliminer ou saboter (Android) : une vibration ne prouve rien, tout le monde reçoit des notifications.
 - Le MJ arbitre tout litige ; ses décisions sont définitives.

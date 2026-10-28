@@ -1,9 +1,12 @@
 // Tests des modules partagés : mini-jeux, énigmes, terrain, paramètres, codes, notifications.
 import { describe, expect, it } from 'vitest';
-import { FIXES, GAMES } from '../src/shared/catalog';
+import { ASSEMBLE_WORDS, FIXES, GAMES, SYMBOLS } from '../src/shared/catalog';
 import { addPlayer, createGame, gmAction, GameError, playerAction } from '../src/shared/engine';
 import { pushEvents, snapshot } from '../src/shared/notify';
-import { assemblePuzzle, checkAnswer, countPuzzle, makeFixChallenge, makeTaskChallenge, normalizeAnswer } from '../src/shared/puzzles';
+import {
+  assembleAnswer, assemblePuzzle, checkAnswer, countAnswer, countPuzzle, countQuestion, countQuestions, makeFixChallenge, makeTaskChallenge, normalizeAnswer,
+  type AssembleLine, type CountScope,
+} from '../src/shared/puzzles';
 import { CODE_ALPHABET, cryptoRng, normalizeCode, randomCode, randomDigits, seededRng, sha256, shuffle } from '../src/shared/rng';
 import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors, sanitizeSettings, SETTING_BOUNDS } from '../src/shared/settings';
 import { availableSabotages, EXAMPLE_ROOMS, exampleTerrain, generateTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
@@ -27,7 +30,9 @@ describe('mini-jeux : chaque défi accepte sa bonne réponse et refuse les mauva
           expect(checkAnswer(g, c.answer, bad)).toBe(false);
         }
         // les réponses des énigmes papier ne sont jamais dans les paramètres envoyés au téléphone
-        if (GAMES[g].paper) expect(JSON.stringify(c.params)).not.toContain(String(c.answer));
+        // (inventaire : seule la question part — symbole et zone — ; la réponse exige la grille imprimée)
+        if (g === 'assemble') expect(JSON.stringify(c.params)).not.toContain(String(c.answer));
+        if (g === 'count') expect(Object.keys(c.params).sort()).toEqual(['question', 'scope', 'sym']);
       }
     });
   }
@@ -54,15 +59,65 @@ describe('mini-jeux : chaque défi accepte sa bonne réponse et refuse les mauva
       (c.answer as number[]).forEach((r, li) => expect(right[r]).toBe(left[li]));
     }
   });
-  it('énigmes papier : grille 8×6, réponse = nombre réel de symboles, mot reconstituable', () => {
+  it('inventaire : 30 questions par fiche (6 symboles × 5 zones), réponses exactes, moitiés cohérentes', () => {
     for (let seed = 0; seed < 200; seed++) {
       const p = countPuzzle(seed);
-      const target = p.question.match(/\((.)\)/)![1];
-      expect(p.grid.filter((g) => g === target).length).toBe(Number(p.answer));
-      const a = assemblePuzzle(seed);
-      const word = [...a.pieces].sort((x, y) => x.index - y.index).map((x) => x.letter).join('');
-      expect(word).toBe(a.word);
+      expect(p.grid).toHaveLength(48);
+      const qs = countQuestions(seed);
+      expect(qs).toHaveLength(30);
+      expect(new Set(qs.map((q) => q.question)).size).toBe(30);
+      for (let sym = 0; sym < SYMBOLS.length; sym++) {
+        const at = (r: number, c: number) => p.grid[r * 8 + c] === SYMBOLS[sym];
+        let all = 0, top = 0, left = 0;
+        for (let r = 0; r < 6; r++) for (let c = 0; c < 8; c++) if (at(r, c)) {
+          all++;
+          if (r < 3) top++;
+          if (c < 4) left++;
+        }
+        expect(countAnswer(seed, sym, 'all')).toBe(String(all));
+        expect(countAnswer(seed, sym, 'top')).toBe(String(top));
+        expect(countAnswer(seed, sym, 'left')).toBe(String(left));
+        expect(Number(countAnswer(seed, sym, 'top')) + Number(countAnswer(seed, sym, 'bottom'))).toBe(all);
+        expect(Number(countAnswer(seed, sym, 'left')) + Number(countAnswer(seed, sym, 'right'))).toBe(all);
+      }
     }
+    // la grille imprimée est la même qu'avant (anciennes fiches toujours lisibles)
+    expect(countPuzzle(5).grid.join('')).toMatchSnapshot();
+  });
+  it('inventaire : le serveur tire la question au hasard, jamais une réponse nulle, réponse jamais envoyée', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      const c = makeTaskChallenge('count', 77, rng);
+      const p = c.params as { question: string; sym: number; scope: CountScope };
+      expect(c.answer).toBe(countAnswer(77, p.sym, p.scope));
+      expect(c.answer).not.toBe('0');
+      expect(p.question).toBe(countQuestion(p.sym, p.scope));
+      seen.add(p.question);
+    }
+    expect(seen.size).toBeGreaterThan(20);
+  });
+  it('puzzle : deux mots par jeu de bandes (haut et bas), de même longueur, demandés au hasard', () => {
+    const lines = new Set<string>();
+    for (let seed = 0; seed < 300; seed++) {
+      const a = assemblePuzzle(seed);
+      const sorted = [...a.pieces].sort((x, y) => x.index - y.index);
+      expect(sorted.map((x) => x.letter).join('')).toBe(a.word);
+      expect(sorted.map((x) => x.bottom).join('')).toBe(a.word2);
+      expect(a.word2).not.toBe(a.word);
+      expect(a.word2).toHaveLength(a.word.length);
+      expect(assembleAnswer(seed, 'top')).toBe(a.word);
+      expect(assembleAnswer(seed, 'bottom')).toBe(a.word2);
+      const c = makeTaskChallenge('assemble', seed, rng);
+      const line = (c.params as { line: AssembleLine }).line;
+      lines.add(line);
+      expect(c.answer).toBe(assembleAnswer(seed, line));
+      expect(JSON.stringify(c.params)).not.toContain(a.word);
+      expect(JSON.stringify(c.params)).not.toContain(a.word2);
+    }
+    expect([...lines].sort()).toEqual(['bottom', 'top']);
+  });
+  it('chaque mot du puzzle a au moins un partenaire de même longueur', () => {
+    for (const w of ASSEMBLE_WORDS) expect(ASSEMBLE_WORDS.filter((x) => x.length === w.length && x !== w).length).toBeGreaterThan(0);
   });
   it('réponses texte : accents, espaces et casse ignorés', () => {
     expect(normalizeAnswer(' comète ')).toBe('COMETE');
@@ -232,12 +287,17 @@ describe('notifications : événements publics uniquement', () => {
     const b = snapshot(s);
     const imp = s.players.find((p) => p.role === 'impostor')!;
     const crew = s.players.filter((p) => p.role === 'crewmate');
-    const { code } = playerAction(s, imp.id, { type: 'arm' }, ctx(100_000)) as { code: string };
-    playerAction(s, crew[0].id, { type: 'killed', code }, ctx(100_001));
-    expect(pushEvents(b, s).players).toEqual([]);
+    playerAction(s, imp.id, { type: 'kill', target: crew[0].id }, ctx(100_000));
+    expect(pushEvents(b, s).players).toEqual([]); // aucune notification d'élimination (même pas à la victime)
+    playerAction(s, crew[0].id, { type: 'dispute' }, ctx(100_001));
+    const d = pushEvents(b, s);
+    expect(d.players).toEqual([]);
+    expect(d.gm[0].title).toMatch(/Contestation/);
     playerAction(s, crew[1].id, { type: 'report', code: crew[0].body!.code }, ctx(100_002));
-    const txt = JSON.stringify(pushEvents(b, s));
+    const txt = JSON.stringify(pushEvents(b, s).players);
     for (const p of s.players) expect(txt).not.toContain(p.name);
+    // même la notification du MJ (écran verrouillé) ne nomme pas l'imposteur accusé
+    expect(JSON.stringify(pushEvents(b, s).gm)).not.toContain(imp.name);
   });
 });
 
@@ -294,5 +354,21 @@ describe('outils du MJ : tests des tâches, test d’alerte, abonnements', () =>
     gmAction(s, { type: 'ping' }, ctx(1));
     gmAction(s, { type: 'ping' }, ctx(2));
     expect(viewForPlayer(s, p.id, 3).pingId).toBe(2);
+  });
+});
+
+describe('lecture des QR codes (téléphone)', () => {
+  it('corps : QR code affiché par le téléphone du corps, lien profond, rien d’autre', async () => {
+    const { bodyCodeOf, bodyUrl } = await import('../src/client/codes');
+    expect(bodyCodeOf(bodyUrl('0420', 'https://x.workers.dev'))).toBe('0420');
+    expect(bodyCodeOf('c:1234')).toBe('1234');
+    for (const bad of ['https://x.workers.dev/#/s/AB3K', 'https://x.workers.dev/#/j/BCDFGH', '1234', '#/c/12345', '#/c/12a4', '']) expect(bodyCodeOf(bad)).toBeUndefined();
+  });
+  it('postes : QR code de fiche ou code tapé ; l’affiche d’invitation et les QR inconnus sont ignorés sans rien envoyer', async () => {
+    const { stationCodeOf } = await import('../src/client/codes');
+    expect(stationCodeOf('https://x.workers.dev/#/s/AB3K')).toBe('AB3K');
+    expect(stationCodeOf(' ab3k ')).toBe('ab3k');
+    expect(normalizeCode(stationCodeOf('https://x.workers.dev/#/s/ab3k')!)).toBe('AB3K');
+    for (const bad of ['https://x.workers.dev/#/j/BCDFGH', 'https://exemple.com/page', 'WIFI:S:maison;T:WPA;P:secret;;', 'https://x.workers.dev/#/c/1234', '']) expect(stationCodeOf(bad)).toBeUndefined();
   });
 });

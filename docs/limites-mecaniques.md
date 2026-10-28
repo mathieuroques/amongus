@@ -9,7 +9,7 @@ Légende : ❌ retiré / non reproduit · 🔁 remplacé par un équivalent qui 
 |---|---|---|
 | Sabotage **portes** (salle fermée puis rouverte seule) | Une porte ne se ferme ni ne se rouvre seule ; la verrouiller est dangereux ; l’interdiction d’entrer n’est pas perceptible | ❌ **Retiré** |
 | **Journal des portes** (MIRA HQ) | Aucun capteur sur les portes | ❌ |
-| Sabotage **lumières** (vision réduite de l’équipage) | Éteindre les lumières = chutes ; une « vision réduite » ne s’impose pas aux yeux | 🔁 « Panne de courant » : les postes de tâches sont hors service sur les téléphones jusqu’à la réparation (effet purement numérique) |
+| Sabotage **lumières** (vision réduite de l’équipage) | Éteindre les lumières ou couper le disjoncteur = chutes dans les escaliers, appareils et alarmes coupés ; une « vision réduite » ne s’impose pas aux yeux | 🔁 « Panne de courant » : comme dans le jeu, elle profite aux imposteurs — « dans le noir, on ne voit pas les corps » : **aucun signalement possible** jusqu’à la réparation (et, comme pendant tout sabotage, pas de bouton d’urgence). Les tâches continuent. Effet purement numérique : les vraies lumières restent allumées |
 | **Vision** de l’équipage / des imposteurs (réglage) | On voit ce qu’on voit | ❌ |
 | **Vitesse** des joueurs (réglage) | On ne court jamais | ❌ |
 | Échelles, plateformes, tyrolienne (The Airship, The Fungle) | Dangereux | ❌ |
@@ -19,19 +19,19 @@ Légende : ❌ retiré / non reproduit · 🔁 remplacé par un équivalent qui 
 ## 2. Informations que le jeu connaît et que la maison ignore
 | Mécanique | Pourquoi | Dans notre version |
 |---|---|---|
-| **Distance d’élimination**, ligne de vue | Le téléphone ne sait pas où est le joueur | 🔁 Le geste (tape sur l’épaule) + le code montré en personne prouvent la proximité ; ⚠️ un code envoyé par message serait de la triche |
+| **Distance d’élimination**, ligne de vue | Le téléphone ne sait pas où est le joueur | 🔁 Le geste (tape sur l’épaule) puis le choix du pseudonyme par l’imposteur ; ⚠️ éliminer à distance serait de la triche : la victime peut **contester** et le MJ arbitre (voir `conception.md` § 4) |
 | **Présence au poste** d’une tâche | Idem | 🔁 Code/QR imprimé à un endroit fixe ; ⚠️ une photo du code permettrait de tricher (journal des codes erronés, arbitrage) |
 | **Caméras de sécurité** | Il faudrait filmer la maison : vie privée, matériel | ❌ |
 | **Carte d’administration** (nombre de joueurs par pièce) | Il faudrait localiser chaque téléphone en intérieur (impossible de façon fiable depuis un site web, et intrusif) | ❌ |
 | **Moniteur de vie** (qui est vivant) | Le serveur le sait | 🔁 Poste « Moniteur de vie » à scanner sur place |
 | **Flèches** vers les tâches / carte personnelle | Pas de position | 🔁 Liste des tâches avec la pièce et l’étage, regroupée par pièce |
-| Corps **visibles dans le champ de vision** | — | 🔁 La victime reste assise sur place ; le signalement exige son code (preuve d’être à côté) |
+| Corps **visibles dans le champ de vision** | — | 🔁 La victime reste assise sur place ; le signalement exige son code, affiché en très gros, ou son QR code (preuve d’être à côté) |
 | Fin automatique d’une **réunion** quand tout le monde est téléporté | On ne se téléporte pas | 🔁 Phase de rassemblement : chacun touche « Je suis arrivé·e », sinon minuteur |
 
 ## 3. Ce que les fantômes peuvent faire
 | Mécanique | Pourquoi | Dans notre version |
 |---|---|---|
-| Fantômes **invisibles**, qui traversent les murs | Un fantôme reste une personne visible | ⚠️ Badge « FANTÔME », silence total, il ne fait ses tâches qu’après la découverte de son corps (pour ne pas révéler sa mort trop tôt) ; les morts sont de toute façon annoncés à chaque réunion |
+| Fantômes **invisibles**, qui traversent les murs | Un fantôme reste une personne visible | ⚠️ Silence total ; il ne fait ses tâches qu’après la découverte ou la disparition de son corps, et n’accroche le badge « FANTÔME » qu’à l’annonce de sa mort (réunion suivante ou éjection), pour ne pas la révéler trop tôt |
 | **Chat des fantômes** | Pas de chat dans l’application | 🔁 Les fantômes peuvent se parler à voix basse, loin des vivants |
 | **Hanter** (voir le rôle des vivants) | Un fantôme qui sait tout et reste dans la pièce peut se trahir par une mimique | 🔁 Option « les fantômes voient les rôles », **désactivée par défaut** |
 
@@ -62,4 +62,4 @@ Légende : ❌ retiré / non reproduit · 🔁 remplacé par un équivalent qui 
 Les rôles « ✅ possibles » pourraient être ajoutés plus tard ; ils restent hors de la version actuelle, qui reproduit le mode classique.
 
 ## 6. Ce qui reste volontairement fondé sur la confiance
-Aucune application web ne peut le garantir ; le règlement l’impose et le maître du jeu arbitre : rester assis en tant que corps, silence des fantômes, ne pas photographier les codes, ne pas envoyer son code d’élimination par message, ne pas montrer son écran de rôle, respecter les zones interdites et les passages, ne jamais courir.
+Aucune application web ne peut le garantir ; le règlement l’impose et le maître du jeu arbitre : rester assis en tant que corps, silence des fantômes, ne pas photographier les codes, ne pas éliminer à distance, ne pas montrer son écran de rôle, respecter les zones interdites et les passages, ne jamais courir.

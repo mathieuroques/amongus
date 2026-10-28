@@ -1,19 +1,23 @@
 // Interface des joueurs (équipage, imposteurs, fantômes).
 // Principe d'ergonomie : à chaque instant, l'écran dit quoi faire ensuite, en gros, en une ligne.
 
+import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { GAMES, SABOTAGE_INFO, TASK_TYPE_LABEL } from '../shared/catalog';
 import type { ChallengeView } from '../shared/engine';
+import { GATHER_MAJORITY_SEC } from '../shared/settings';
 import type { MyTask, PlayerView } from '../shared/view';
 import { usePlayerAlerts } from './alerts';
 import { AlertOverlay, AlertSetup } from './alerts-ui';
 import { dropPlayer, go } from './conn';
 import { GameView, gameInfo } from './games';
 import type { Connection } from './net';
+import { bodyCodeOf, bodyUrl, stationCodeOf } from './codes';
 import { Practice } from './practice';
+import { QR } from './qr';
 import { Scanner } from './scanner';
 import { useStore, useTick } from './store';
-import { ActButton, Bar, buzz, CodeForm, Collapse, Countdown, fmtSec, Modal, NetBadge, OfflineBanner, Reveal, toast, unlockAudio } from './ui';
+import { ActButton, Bar, buzz, CodeForm, Collapse, confirmDialog, Countdown, fmtSec, Modal, NetBadge, OfflineBanner, Reveal, setWakeLock, sound, toast, unlockAudio, wakeLockOn } from './ui';
 
 type Conn = Connection<PlayerView>;
 
@@ -58,7 +62,7 @@ export function PlayerApp({ conn }: { conn: Conn }) {
         {!v.me.alive && v.phase !== 'lobby' && v.phase !== 'ended' && <span class="badge dead">👻 fantôme</span>}
         <NetBadge status={st.status} />
       </div>
-      <OfflineBanner status={st.status} />
+      <OfflineBanner status={st.status} waiting={st.waiting} />
       <AlertOverlay />
       {v.emergencyStop && <StopScreen />}
       {v.paused && !v.emergencyStop && (
@@ -249,7 +253,7 @@ function RoleCard({ v }: { v: PlayerView }) {
       <h1>{imp ? 'IMPOSTEUR' : 'ÉQUIPAGE'}</h1>
       {imp ? (
         <>
-          <p>Éliminez l’équipage sans vous faire démasquer, et sabotez pour semer le chaos.</p>
+          <p>Éliminez l’équipage sans vous faire démasquer, et sabotez pour semer le chaos (bouton « Actions » de l’onglet Rôle).</p>
           <p>Vous gagnez si les imposteurs sont aussi nombreux que l’équipage vivant, ou si un sabotage critique n’est pas réparé à temps.</p>
           {v.allies && v.allies.length > 0 ? (
             <p>
@@ -301,8 +305,16 @@ function SabotageAlarm({ v, conn }: { v: PlayerView; conn: Conn }) {
 // ------------------------------------------------------------------- Jeu
 type Tab = 'tasks' | 'scan' | 'urgent' | 'role';
 
+export interface Flash {
+  /** Instant de la réussite (sert aussi d'identifiant). */
+  id: number;
+  msg: string;
+}
+const FLASH_MS = 6000;
+
 function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
   const [tab, setTab] = useState<Tab>('tasks');
+  const [flash, setFlash] = useState<Flash>();
   const [pending, setPending] = useState<string | undefined>(() => {
     const c = sessionStorage.getItem('imposteurs.pendingScan') ?? undefined;
     if (c) sessionStorage.removeItem('imposteurs.pendingScan');
@@ -312,22 +324,29 @@ function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
     if (pending) setTab('scan');
   }, [pending]);
   useEffect(() => window.scrollTo(0, 0), [tab]);
+  useReadyBuzz(v, conn);
 
-  if (v.me.challenge) return <ChallengeScreen v={v} c={v.me.challenge} conn={conn} />;
+  if (v.me.challenge)
+    return (
+      <ChallengeScreen
+        v={v}
+        c={v.me.challenge}
+        conn={conn}
+        onSuccess={(msg) => {
+          // après une réussite : directement la prochaine étape, sans repasser par le poste
+          setFlash({ id: Date.now(), msg });
+          setTab('tasks');
+        }}
+      />
+    );
   if (v.me.bodyPending) return <BodyScreen v={v} conn={conn} />;
   const left = v.me.tasks?.filter((t) => !t.done).length;
 
   return (
     <>
       <div class="wrap stack">
-        {!v.me.alive && (
-          <div class="card ghost">
-            <strong>👻 Vous êtes un fantôme.</strong>{' '}
-            {v.me.role === 'impostor' ? 'Vous pouvez encore saboter (onglet Rôle), mais plus éliminer.' : 'Terminez vos tâches pour aider l’équipage.'} Silence total avec
-            les vivants, badge FANTÔME visible.
-          </div>
-        )}
-        {tab === 'tasks' && <TasksTab v={v} goScan={() => setTab('scan')} />}
+        {!v.me.alive && <GhostCard v={v} conn={conn} />}
+        {tab === 'tasks' && <TasksTab v={v} flash={flash} goScan={() => setTab('scan')} />}
         {tab === 'scan' && <ScanTab v={v} conn={conn} initial={pending} onConsumed={() => setPending(undefined)} />}
         {tab === 'urgent' && <UrgentTab v={v} conn={conn} goScan={() => setTab('scan')} />}
         {tab === 'role' && <RoleTab v={v} conn={conn} />}
@@ -350,8 +369,63 @@ function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
           </button>
         ))}
       </nav>
-      <ArmedCode v={v} conn={conn} />
     </>
+  );
+}
+
+/** Imposteur : courte vibration quand l'élimination ou le sabotage redevient disponible (plus besoin d'ouvrir l'écran pour vérifier). */
+function useReadyBuzz(v: PlayerView, conn: Conn) {
+  useTick(1000);
+  const now = conn.serverNow();
+  const imp = v.me.role === 'impostor' && v.phase === 'playing';
+  const kill = imp && v.me.alive && now >= (v.me.killCooldownUntil ?? Infinity);
+  const sab = imp && !v.sabotage && (v.sabotageOptions?.length ?? 0) > 0 && now >= (v.sabotageCooldownUntil ?? Infinity);
+  const prev = useRef<{ kill: boolean; sab: boolean }>();
+  useEffect(() => {
+    if (v.paused || v.emergencyStop) return; // en pause, on garde l'état précédent : pas de vibration à la reprise
+    const p = prev.current;
+    prev.current = { kill, sab };
+    if (!p) return;
+    if (kill && !p.kill) buzz(READY_BUZZ.kill);
+    else if (sab && !p.sab) buzz(READY_BUZZ.sabotage);
+  }, [kill, sab, v.paused, v.emergencyStop]);
+}
+export const READY_BUZZ = { kill: [90], sabotage: [40, 70, 40] };
+
+function GhostCard({ v, conn }: { v: PlayerView; conn: Conn }) {
+  const imp = v.me.role === 'impostor';
+  return (
+    <div class="card ghost stack">
+      {v.me.deathRevealed ? (
+        <p style={{ margin: 0 }}>
+          <strong>👻 Vous êtes un fantôme.</strong> Badge FANTÔME bien visible, silence total avec les vivants.{' '}
+          {imp ? 'Vous pouvez encore saboter (onglet Rôle → Actions), mais plus éliminer.' : 'Terminez vos tâches pour aider l’équipage.'}
+        </p>
+      ) : (
+        <p style={{ margin: 0 }}>
+          <strong>👻 Vous êtes mort·e, mais personne ne le sait encore.</strong> Ne portez pas encore le badge FANTÔME : il s’accroche à la prochaine réunion, quand votre mort
+          sera annoncée. D’ici là, silence total, ne répondez à personne{imp ? ' ; vous pouvez encore saboter.' : ' ; faites vos tâches discrètement.'}
+        </p>
+      )}
+      <DisputeButton v={v} conn={conn} />
+    </div>
+  );
+}
+
+/** La victime peut contester une élimination (« on ne m'a pas touché·e ») : le MJ est prévenu et arbitre. */
+function DisputeButton({ v, conn }: { v: PlayerView; conn: Conn }) {
+  if (v.me.alive || v.me.deathCause !== 'killed' || v.phase === 'ended') return null;
+  if (v.me.disputed) return <small class="muted">Contestation envoyée : le maître du jeu va vous parler.</small>;
+  return (
+    <ActButton
+      class="block small"
+      confirm="Contester votre élimination ? Le maître du jeu est prévenu et viendra vous parler. À utiliser seulement si personne ne vous a touché·e."
+      confirmOk="Contester"
+      run={() => conn.act({ type: 'dispute' })}
+      okMsg="Le maître du jeu est prévenu."
+    >
+      ⚖️ Je n’ai pas été touché·e (contester)
+    </ActButton>
   );
 }
 
@@ -376,16 +450,31 @@ function where(t: MyTask) {
   return t.next ? `${t.next.roomName}${t.next.floor ? ` (${t.next.floor})` : ''}` : '';
 }
 
-function TasksTab({ v, goScan }: { v: PlayerView; goScan: () => void }) {
+function TasksTab({ v, goScan, flash }: { v: PlayerView; goScan: () => void; flash?: Flash }) {
   const tasks = v.me.tasks ?? [];
-  const todo = tasks.filter((t) => !t.done);
+  // ordre d'affichage : les plus proches d'abord (même pièce, puis même étage), puis l'ordre personnel du joueur
+  const todo = tasks.map((t, i) => ({ t, i })).filter((x) => !x.t.done).sort((a, b) => (a.t.near ?? 2) - (b.t.near ?? 2) || a.i - b.i).map((x) => x.t);
   const done = tasks.filter((t) => t.done);
-  // regroupement par pièce : on voit d'un coup d'œil où aller
+  const next = todo.find((t) => t.taskId === v.me.nextTaskId) ?? todo[0];
+  // regroupement par pièce : on voit d'un coup d'œil où aller (la pièce de la prochaine étape en premier)
   const rooms = new Map<string, MyTask[]>();
+  if (next) rooms.set(where(next), []);
   for (const t of todo) rooms.set(where(t), [...(rooms.get(where(t)) ?? []), t]);
-  const next = todo[0];
+  // le message de réussite reste 6 s, et ne réapparaît pas en revenant plus tard sur l'onglet
+  const fresh = !!flash && Date.now() - flash.id < FLASH_MS;
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    if (!fresh) return;
+    const t = setTimeout(() => redraw((n) => n + 1), FLASH_MS - (Date.now() - flash!.id) + 20);
+    return () => clearTimeout(t);
+  }, [flash?.id]);
   return (
     <>
+      {flash && fresh && (
+        <div class="card ok flash" role="status">
+          ✅ <strong>{flash.msg}</strong>
+        </div>
+      )}
       {v.me.tasksHidden ? (
         <div class="card warn">
           <h2 style={{ marginTop: 0 }}>📡 Communications coupées</h2>
@@ -393,17 +482,20 @@ function TasksTab({ v, goScan }: { v: PlayerView; goScan: () => void }) {
         </div>
       ) : next ? (
         <button class="card next-step" onClick={goScan}>
-          <small>Prochaine étape</small>
-          <strong>{next.name}</strong>
+          <small>Prochaine étape : {where(next)}</small>
+          <strong>{next.next?.stationName}</strong>
           <span>
-            📍 {where(next)} — {next.next?.stationName}
+            {next.name}
+            {next.steps > 1 ? ` (étape ${next.step + 1}/${next.steps})` : ''}
+            {next.near === 0 ? ' · ici même' : next.near === 1 ? ' · même étage' : ''}
           </span>
-          <span class="muted">Une fois sur place, touchez ici pour scanner le poste →</span>
+          <span class="muted">Une fois sur place, touchez ici : la caméra s’ouvre →</span>
         </button>
       ) : (
         <div class="card ok center">
           <h2 style={{ margin: 0 }}>✅ Toutes vos tâches sont faites !</h2>
-          <p style={{ margin: 0 }}>{v.me.role === 'impostor' ? 'Continuez à faire semblant…' : 'Observez, protégez les autres et aidez à réparer les sabotages.'}</p>
+          {/* texte identique pour tous les rôles : l'écran d'un imposteur ne doit rien trahir */}
+          <p style={{ margin: 0 }}>Observez, protégez les autres et aidez à réparer les sabotages.</p>
         </div>
       )}
       <TaskBarCard v={v} />
@@ -469,17 +561,40 @@ interface ScanResult {
   fix?: boolean;
 }
 
+/** Signale un corps après confirmation. Retourne undefined si le joueur a renoncé. */
+export async function reportBody(conn: Conn, code: string): Promise<boolean | undefined> {
+  if (!(await confirmDialog('Signaler ce corps ? Une réunion commence pour tout le monde.', { ok: 'Signaler le corps', danger: true }))) return undefined;
+  const r = await conn.act({ type: 'report', code });
+  if (!r.ok) toast(r.msg ?? 'Refusé', 'err');
+  return r.ok;
+}
+
 function ScanTab({ v, conn, initial, onConsumed }: { v: PlayerView; conn: Conn; initial?: string; onConsumed: () => void }) {
   const [station, setStation] = useState<{ code: string; info: ScanResult }>();
   const status = useStore(conn.store).status;
   const scan = async (raw: string) => {
+    const body = bodyCodeOf(raw);
+    if (body) return reportBody(conn, body);
+    const code = stationCodeOf(raw);
+    if (!code) {
+      toast('Ce QR code n’est pas celui d’un poste ni d’un corps.', 'err');
+      return false;
+    }
+    raw = code;
     const r = await conn.act<ScanResult>({ type: 'scan', code: raw });
     if (!r.ok) {
       toast(r.msg ?? 'Code refusé.', 'err');
       return false;
     }
     buzz(40);
-    setStation({ code: raw, info: r.data! });
+    const info = r.data!;
+    // une seule tâche à faire ici : on la lance tout de suite (un toucher de moins)
+    if (info.kind === 'task' && !info.block && info.tasks?.length === 1) {
+      const t = await conn.act({ type: 'startTask', code: raw, taskId: info.tasks[0].taskId });
+      if (t.ok) return true;
+      toast(t.msg ?? 'Refusé', 'err');
+    }
+    setStation({ code: raw, info });
     return true;
   };
   useEffect(() => {
@@ -494,9 +609,9 @@ function ScanTab({ v, conn, initial, onConsumed }: { v: PlayerView; conn: Conn; 
     <div class="card stack">
       <h2 style={{ margin: 0 }}>Utiliser un poste</h2>
       <p class="muted" style={{ margin: 0 }}>
-        Tâches, bouton d’urgence, réparations, moniteur de vie : tout se fait en scannant la fiche du poste, sur place.
+        Tâches, bouton d’urgence, réparations, moniteur de vie : tout se fait en scannant la fiche du poste, sur place. Pour signaler un corps, scannez le QR code affiché par son téléphone.
       </p>
-      <Scanner onCode={scan} />
+      <Scanner onCode={scan} autoStart />
     </div>
   );
 }
@@ -655,7 +770,7 @@ export function ChallengeBody({ c, submit, serverNow }: { c: ChallengeView; subm
   );
 }
 
-function ChallengeScreen({ v, c, conn }: { v: PlayerView; c: ChallengeView; conn: Conn }) {
+function ChallengeScreen({ v, c, conn, onSuccess }: { v: PlayerView; c: ChallengeView; conn: Conn; onSuccess: (msg: string) => void }) {
   const info = gameInfo(c.game);
   return (
     <div class="overlay">
@@ -672,18 +787,25 @@ function ChallengeScreen({ v, c, conn }: { v: PlayerView; c: ChallengeView; conn
           c={c}
           serverNow={() => conn.serverNow()}
           submit={async (answer) => {
-            const r = await conn.act<{ taskDone?: boolean; fixed?: boolean; partial?: boolean; fake?: boolean; nextStep?: number }>({ type: 'submit', challengeId: c.id, answer });
+            const r = await conn.act<{ taskDone?: boolean; fixed?: boolean; partial?: boolean; nextStep?: number }>({ type: 'submit', challengeId: c.id, answer });
             if (!r.ok) {
               toast(r.msg ?? 'Refusé', 'err');
               return false;
             }
             const d = r.data ?? {};
-            if (d.taskDone) toast('Tâche terminée !', 'ok');
-            else if (d.nextStep) toast(`Étape validée. Allez au poste suivant (étape ${d.nextStep}) : voir l’onglet Tâches.`, 'ok');
-            else if (d.fixed) toast('Sabotage réparé !', 'ok');
-            else if (d.partial) toast('Poste réparé : il faut aussi réparer l’autre poste !', 'ok');
-            else toast('Terminé.', 'ok');
+            // messages identiques pour une vraie tâche et une tâche simulée par un imposteur
+            const msg = d.taskDone
+              ? 'Tâche terminée !'
+              : d.nextStep
+                ? `Étape validée ! Étape ${d.nextStep} : voir ci-dessous.`
+                : d.fixed
+                  ? 'Sabotage réparé !'
+                  : d.partial
+                    ? 'Poste réparé : il faut aussi réparer l’autre poste !'
+                    : 'Terminé.';
+            sound('success');
             buzz(60);
+            onSuccess(msg);
             return true;
           }}
         />
@@ -700,26 +822,39 @@ function BodyScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
   useTick(1000);
   const now = conn.serverNow();
   const b = v.me.body!;
+  // l'écran doit rester allumé pour que le code reste lisible par celui qui découvre le corps
+  useEffect(() => {
+    const before = wakeLockOn();
+    void setWakeLock(true);
+    return () => {
+      if (!before) void setWakeLock(false);
+    };
+  }, []);
   return (
-    <div class="wrap stack center">
+    <div class="wrap stack center body-screen">
       <div class="card danger">
         <h1 style={{ marginTop: 0 }}>💀 Vous avez été éliminé·e</h1>
-        <p>
-          <strong>Asseyez-vous calmement sur place</strong> (jamais dans un escalier ni un passage : décalez-vous de quelques pas si besoin). Restez silencieux·se et immobile.
-        </p>
-        <p class="muted" style={{ margin: 0 }}>
-          Ne révélez jamais qui vous a éliminé·e.
+        <p style={{ margin: 0 }}>
+          <strong>Asseyez-vous calmement sur place</strong> (jamais dans un escalier ni un passage), silencieux·se et immobile, écran tourné vers l’extérieur. Ne révélez jamais qui
+          vous a éliminé·e.
         </p>
       </div>
-      <div class="card">
-        <p style={{ margin: 0 }}>Code de votre corps — montrez-le à la personne qui vous découvre :</p>
-        <div class="big-code">{b.code}</div>
+      <div class="card stack">
+        <p style={{ margin: 0 }}>Code du corps — lisible de loin, ou QR code à scanner (onglet Poste) :</p>
+        <div class="body-code" aria-label={`Code du corps ${b.code}`}>
+          {b.code}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <QR text={bodyUrl(b.code)} size={210} />
+        </div>
       </div>
+      {v.sabotage?.kind === 'lights' && <p class="card warn">Panne de courant : personne ne peut vous signaler tant qu’elle n’est pas réparée.</p>}
       {b.vanishAt && (
         <p class="muted">
-          Si personne ne vous trouve, votre corps disparaît dans <Countdown until={b.vanishAt} now={now} /> : vous deviendrez alors un fantôme libre de vos mouvements.
+          Si personne ne vous trouve, votre corps disparaît dans <Countdown until={b.vanishAt} now={now} /> : vous deviendrez un fantôme, sans badge jusqu’à la prochaine réunion.
         </p>
       )}
+      <DisputeButton v={v} conn={conn} />
       <ActButton class="block" run={() => conn.act({ type: 'alert', message: 'Alerte envoyée par un corps' })} okMsg="Le maître du jeu est prévenu.">
         ⚠️ Alerte sécurité
       </ActButton>
@@ -729,7 +864,7 @@ function BodyScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
 
 // ------------------------------------------------------------------- Urgence
 function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () => void }) {
-  const [modal, setModal] = useState<'body' | 'killed' | 'alert' | 'meeting'>();
+  const [modal, setModal] = useState<'body' | 'alert' | 'meeting'>();
   useTick(1000);
   const now = conn.serverNow();
   const meetingRoom = v.terrain.rooms.find((r) => r.id === v.terrain.meetingRoomId)?.name;
@@ -741,9 +876,6 @@ function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () 
           <button class="btn big block danger action" onClick={() => setModal('body')}>
             <span>💀</span> J’ai trouvé un corps
           </button>
-          <button class="btn big block warn action" onClick={() => setModal('killed')}>
-            <span>🗡</span> On vient de m’éliminer
-          </button>
           <button class="btn big block action" onClick={() => setModal('meeting')}>
             <span>🚨</span> Je veux une réunion d’urgence
           </button>
@@ -754,7 +886,13 @@ function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () 
       </button>
       {modal === 'body' && (
         <Modal title="💀 Signaler un corps" onClose={() => setModal(undefined)}>
-          <p>Tapez le code affiché sur le téléphone de la personne assise au sol.</p>
+          {v.sabotage?.kind === 'lights' && <p class="card warn">Panne de courant : dans le noir, impossible de signaler un corps. Réparez d’abord au poste Énergie.</p>}
+          <button class="btn big block primary" onClick={() => (setModal(undefined), goScan())}>
+            📷 Scanner le QR code du corps
+          </button>
+          <p class="muted center" style={{ margin: '4px 0' }}>
+            — ou tapez le code en gros sur son écran —
+          </p>
           <CodeForm
             label="Code du corps (4 chiffres)"
             digits
@@ -764,25 +902,6 @@ function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () 
             btnClass="danger"
             submit={async (code) => {
               const r = await conn.act({ type: 'report', code });
-              if (!r.ok) toast(r.msg ?? 'Refusé', 'err');
-              else setModal(undefined);
-              return r.ok;
-            }}
-          />
-        </Modal>
-      )}
-      {modal === 'killed' && (
-        <Modal title="🗡 Vous avez été éliminé·e" onClose={() => setModal(undefined)}>
-          <p>Un imposteur vous a touché l’épaule et vous montre un code : tapez-le tout de suite.</p>
-          <CodeForm
-            label="Code montré par l’imposteur (4 chiffres)"
-            digits
-            length={4}
-            autoFocus
-            button="Je suis éliminé·e"
-            btnClass="warn"
-            submit={async (code) => {
-              const r = await conn.act({ type: 'killed', code });
               if (!r.ok) toast(r.msg ?? 'Refusé', 'err');
               else setModal(undefined);
               return r.ok;
@@ -857,14 +976,13 @@ function AlertModal({ conn, close }: { conn: Conn; close: () => void }) {
 
 // ------------------------------------------------------------------- Rôle (et actions d'imposteur)
 function RoleTab({ v, conn }: { v: PlayerView; conn: Conn }) {
-  useTick(1000);
-  const now = conn.serverNow();
   const imp = v.me.role === 'impostor';
   return (
     <>
-      <Reveal label={imp ? 'Mon rôle et mes actions secrètes' : 'Mon rôle'}>
+      {/* Deux voiles identiques pour tous les rôles : l'onglet ne trahit rien tant qu'on ne touche pas. */}
+      <ActionsVeil>{imp ? <ImpostorActions v={v} conn={conn} /> : <CrewActions v={v} />}</ActionsVeil>
+      <Reveal label="Mon rôle">
         <RoleCard v={v} />
-        {imp && <ImpostorActions v={v} conn={conn} now={now} />}
         {!imp && !v.me.alive && <p class="card ghost">Fantôme d’équipage : terminez vos tâches. Vous ne pouvez plus voter, signaler ni réparer.</p>}
       </Reveal>
       <FacadeButton v={v} />
@@ -876,6 +994,47 @@ function RoleTab({ v, conn }: { v: PlayerView; conn: Conn }) {
       </Collapse>
       <SafetyCard v={v} />
     </>
+  );
+}
+
+/** Masquage du panneau d'actions après 30 s sans le toucher, ou dès que l'application passe en arrière-plan. */
+export const ACTIONS_IDLE_MS = 30_000;
+
+function ActionsVeil({ children }: { children: ComponentChildren }) {
+  const [shown, setShown] = useState(false);
+  const [poke, setPoke] = useState(0);
+  useEffect(() => {
+    if (!shown) return;
+    const t = setTimeout(() => setShown(false), ACTIONS_IDLE_MS);
+    const hide = () => document.visibilityState !== 'visible' && setShown(false);
+    document.addEventListener('visibilitychange', hide);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('visibilitychange', hide);
+    };
+  }, [shown, poke]);
+  return shown ? (
+    <div class="card stack actions-panel" onPointerDown={() => setPoke((n) => n + 1)} onInput={() => setPoke((n) => n + 1)}>
+      {children}
+      <button class="btn block small" onClick={() => setShown(false)}>
+        🙈 Masquer
+      </button>
+    </div>
+  ) : (
+    <button class="veil veil-small" style={{ width: '100%', border: 'none', color: 'inherit' }} onClick={() => setShown(true)}>
+      <div>
+        <strong>⚙️ Actions</strong>
+        <div class="muted">Touchez pour afficher. Cachez votre écran.</div>
+      </div>
+    </button>
+  );
+}
+
+function CrewActions({ v }: { v: PlayerView }) {
+  return (
+    <p style={{ margin: 0 }}>
+      Pas d’action secrète : {v.me.alive ? 'faites vos tâches, signalez les corps et réparez les sabotages.' : 'terminez vos tâches en silence.'}
+    </p>
   );
 }
 
@@ -900,56 +1059,78 @@ function FacadeButton({ v }: { v: PlayerView }) {
   );
 }
 
-function ImpostorActions({ v, conn, now }: { v: PlayerView; conn: Conn; now: number }) {
+/**
+ * Panneau d'actions des imposteurs : couleurs neutres, sans la carte de rôle, pour qu'un regard
+ * par-dessus l'épaule ne voie qu'une liste de noms et de boutons ordinaires.
+ */
+function ImpostorActions({ v, conn }: { v: PlayerView; conn: Conn }) {
+  useTick(1000);
+  const now = conn.serverNow();
   const cd = v.me.killCooldownUntil ?? 0;
   const sabCd = v.sabotageCooldownUntil ?? 0;
+  const [target, setTarget] = useState<string>();
+  const [filter, setFilter] = useState('');
+  const allies = new Set((v.allies ?? []).map((a) => a.id));
+  const targets = v.players
+    .filter((p) => p.status === 'alive' && p.id !== v.me.id && !allies.has(p.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const shown = filter ? targets.filter((p) => norm(p.name).includes(norm(filter))) : targets;
+  const killReady = v.me.alive && now >= cd;
+  const targetName = targets.find((p) => p.id === target)?.name;
   return (
-    <>
+    <div class="stack">
+      <div class="status-lines">
+        {v.me.alive && (
+          <div class="row">
+            <span class="grow">Élimination</span>
+            <strong>{killReady ? 'prête' : fmtSec(cd - now)}</strong>
+          </div>
+        )}
+        <div class="row">
+          <span class="grow">Sabotage</span>
+          <strong>{v.sabotage ? 'en cours' : now >= sabCd ? 'prêt' : fmtSec(sabCd - now)}</strong>
+        </div>
+      </div>
       {v.me.alive && (
-        <div class="card danger stack">
-          <h3 style={{ margin: 0 }}>🗡 Élimination</h3>
+        <div class="stack">
           <p class="muted" style={{ margin: 0 }}>
-            Touchez légèrement l’épaule de la victime et montrez-lui le code : elle le tape sur son téléphone. Jamais dans un escalier ou un passage.
+            Touchez l’épaule de la personne, puis son pseudonyme. Jamais dans un escalier ou un passage.
           </p>
-          {now < cd ? (
-            <div class="center">
-              Prochaine élimination possible dans <span class="big-num">{fmtSec(cd - now)}</span>
-            </div>
-          ) : (
-            <ActButton class="block big danger" run={() => conn.act({ type: 'arm' })}>
-              Préparer un code d’élimination
-            </ActButton>
-          )}
+          {targets.length > 8 && <input type="search" placeholder="Rechercher un pseudonyme" value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} aria-label="Rechercher un pseudonyme" />}
+          <div class="name-grid">
+            {shown.map((p) => (
+              <button key={p.id} class={`btn name ${target === p.id ? 'sel' : ''}`} disabled={!killReady} onClick={() => setTarget(p.id)}>
+                {p.name}
+              </button>
+            ))}
+          </div>
+          {shown.length === 0 && <p class="muted">Personne.</p>}
         </div>
       )}
-      <div class="card stack">
-        <h3 style={{ margin: 0 }}>🔧 Sabotages</h3>
+      <div class="stack">
         {v.sabotage ? (
-          <p>Sabotage en cours : {v.sabotage.label}.</p>
-        ) : now < sabCd ? (
-          <div class="center">
-            Sabotage disponible dans <span class="big-num">{fmtSec(sabCd - now)}</span>
-          </div>
+          <p style={{ margin: 0 }}>En cours : {v.sabotage.label}.</p>
         ) : (
           v.sabotageOptions?.map((k) => (
             <ActButton
               key={k}
-              class={`block ${SABOTAGE_INFO[k].critical ? 'danger' : 'warn'}`}
+              class="block"
+              disabled={now < sabCd}
               confirm={`Déclencher « ${SABOTAGE_INFO[k].label} » ?\n${SABOTAGE_INFO[k].short}`}
-              confirmOk="Saboter"
+              confirmOk="Déclencher"
               run={() => conn.act({ type: 'sabotage', kind: k })}
-              okMsg="Sabotage déclenché."
+              okMsg="Déclenché."
             >
               {SABOTAGE_INFO[k].label}
               {SABOTAGE_INFO[k].critical ? ' (critique)' : ''}
             </ActButton>
           ))
         )}
-        <small>Délai partagé entre tous les imposteurs. Les fantômes imposteurs peuvent aussi saboter.</small>
+        <small>Délai partagé entre tous les imposteurs. Votre téléphone vibre brièvement quand une action redevient possible (Android).</small>
       </div>
       {v.terrain.passages && v.terrain.passages.length > 0 && v.me.alive && (
-        <div class="card">
-          <h3 style={{ marginTop: 0 }}>🕳 Conduits (réservés aux imposteurs)</h3>
+        <Collapse title="🕳 Conduits">
           <ul class="list">
             {v.terrain.passages.map((p) => (
               <li key={p.id}>
@@ -961,29 +1142,31 @@ function ImpostorActions({ v, conn, now }: { v: PlayerView; conn: Conn; now: num
             ))}
           </ul>
           <small>En marchant. Être vu sortir d’un conduit est une preuve !</small>
+        </Collapse>
+      )}
+      {target && targetName && (
+        <div class="confirm-bar neutral">
+          <div>{targetName} ?</div>
+          <div class="row">
+            <button class="btn grow" onClick={() => setTarget(undefined)}>
+              Annuler
+            </button>
+            <ActButton
+              class="grow primary"
+              run={async () => {
+                const r = await conn.act({ type: 'kill', target });
+                setTarget(undefined);
+                if (r.ok) buzz(40);
+                return r;
+              }}
+              okMsg="Validé."
+            >
+              Valider
+            </ActButton>
+          </div>
         </div>
       )}
-    </>
-  );
-}
-
-function ArmedCode({ v, conn }: { v: PlayerView; conn: Conn }) {
-  useTick(500);
-  const k = v.me.killCode;
-  if (!k || v.phase !== 'playing') return null;
-  const now = conn.serverNow();
-  return (
-    <Modal title="🗡 Code d’élimination">
-      <p style={{ margin: 0 }}>
-        Montrez ce code à votre victime. Il expire dans <Countdown until={k.expiresAt} now={now} />.
-      </p>
-      <div class="big-code" style={{ color: 'var(--imp)' }}>
-        {k.code}
-      </div>
-      <ActButton class="block" run={() => conn.act({ type: 'disarm' })}>
-        Annuler
-      </ActButton>
-    </Modal>
+    </div>
   );
 }
 
@@ -1035,7 +1218,11 @@ function MeetingScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
           <strong>💀 Morts depuis la dernière réunion :</strong> {m.newlyDead.map((d) => d.name).join(', ')}
         </div>
       )}
-      {!v.me.alive && <div class="card ghost">👻 Fantôme : assistez en silence, sans aucun signe. Vous ne votez pas.</div>}
+      {!v.me.alive && (
+        <div class="card ghost">
+          👻 Fantôme : votre mort est maintenant annoncée, <strong>accrochez votre badge FANTÔME</strong>. Assistez en silence, sans aucun signe. Vous ne votez pas.
+        </div>
+      )}
 
       {m.stage === 'gather' && (
         <div class="card stack center">
@@ -1045,6 +1232,11 @@ function MeetingScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
           <div class="big-num">
             {m.checkedInCount}/{m.aliveCount} arrivé·es
           </div>
+          {2 * m.checkedInCount > m.aliveCount && m.checkedInCount < m.aliveCount && (
+            <p class="muted" style={{ margin: 0 }}>
+              La majorité est là : la discussion commence dans {GATHER_MAJORITY_SEC} s au plus, même sans les retardataires.
+            </p>
+          )}
           {v.me.alive &&
             (v.me.checkedIn ? (
               <p class="card ok">✅ Vous êtes signalé·e présent·e. La discussion commence quand tout le monde est là.</p>
@@ -1059,8 +1251,23 @@ function MeetingScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
       {m.stage === 'discussion' && (
         <div class="card stack">
           <p style={{ margin: 0 }}>
-            <strong>Discutez !</strong> Qui était où ? Qu’avez-vous vu ? Le vote s’ouvre à la fin du compte à rebours.
+            <strong>Discutez !</strong> Qui était où ? Qu’avez-vous vu ? Le vote s’ouvre dès que la majorité est prête, ou à la fin du compte à rebours.
           </p>
+          {v.me.alive &&
+            (m.myReady ? (
+              <p class="card ok" style={{ margin: 0 }}>
+                ✅ Vous êtes prêt·e à voter ({m.readyCount}/{Math.floor(m.aliveCount / 2) + 1} nécessaires).
+              </p>
+            ) : (
+              <ActButton class="block big primary" run={() => conn.act({ type: 'readyVote' })}>
+                ✋ Prêt à voter ({m.readyCount}/{Math.floor(m.aliveCount / 2) + 1})
+              </ActButton>
+            ))}
+          {!v.me.alive && (
+            <small class="center">
+              Prêts à voter : {m.readyCount}/{Math.floor(m.aliveCount / 2) + 1}
+            </small>
+          )}
           <PlayerChips alive={alive} dead={dead} meId={v.me.id} />
         </div>
       )}

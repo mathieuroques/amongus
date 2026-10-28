@@ -7,6 +7,11 @@ import { Store } from './store';
 
 export type NetStatus = 'connecting' | 'online' | 'offline';
 
+/** Une action faite pendant une reconnexion (téléphone sorti de veille…) attend jusqu'à ce délai avant d'être refusée. */
+export const RECONNECT_GRACE_MS = 5000;
+/** Sans aucun message depuis ce délai (le serveur répond aux « ping » toutes les 12 s), la connexion est présumée morte. */
+export const STALE_MS = 20_000;
+
 export interface NetState<V> {
   status: NetStatus;
   view?: V;
@@ -15,6 +20,8 @@ export interface NetState<V> {
   error?: { code: string; msg: string };
   kicked?: boolean;
   lastMessageAt: number;
+  /** Actions en attente de la reconnexion (bandeau « Reconnexion… » affiché tout de suite). */
+  waiting: number;
 }
 
 export interface ActResult<T = any> {
@@ -41,7 +48,7 @@ export class Connection<V extends PlayerView | GmView> {
 
   constructor(readonly code: string, auth: Auth) {
     this.auth = auth;
-    this.store = new Store<NetState<V>>({ status: 'connecting', skew: 0, lastMessageAt: Date.now() });
+    this.store = new Store<NetState<V>>({ status: 'connecting', skew: 0, lastMessageAt: Date.now(), waiting: 0 });
     this.connect();
     window.addEventListener('online', this.wake);
     document.addEventListener('visibilitychange', this.onVisible);
@@ -176,13 +183,48 @@ export class Connection<V extends PlayerView | GmView> {
     }
   }
 
-  /** Envoie une action et attend la confirmation du serveur (jamais d'affichage « réussi » sans elle). */
-  act<T = any>(a: object): Promise<ActResult<T>> {
+  private ready() {
+    return !!this.ws && this.ws.readyState === 1 && this.store.get().status === 'online';
+  }
+
+  /** Attend que la connexion soit de nouveau utilisable (au plus `ms`). */
+  private waitOnline(ms: number): Promise<boolean> {
+    if (this.ready()) return Promise.resolve(true);
     return new Promise((resolve) => {
-      if (!this.ws || this.ws.readyState !== 1 || this.store.get().status !== 'online') {
-        resolve({ ok: false, code: 'offline', msg: 'Hors connexion : action non envoyée. Attendez la reconnexion.' });
-        return;
-      }
+      let unsub = () => {};
+      const finish = (ok: boolean) => {
+        clearTimeout(timer);
+        unsub();
+        resolve(ok);
+      };
+      const timer = window.setTimeout(() => finish(this.ready()), ms);
+      unsub = this.store.subscribe(() => {
+        if (this.ready()) finish(true);
+      });
+    });
+  }
+
+  /**
+   * Envoie une action et attend la confirmation du serveur (jamais d'affichage « réussi » sans elle).
+   * Si la connexion est en train de revenir (sortie de veille), l'action attend quelques secondes
+   * avec un bandeau « Reconnexion… » visible, au lieu d'être refusée tout de suite. Elle n'est jamais
+   * mise en file au-delà : passé ce délai, elle est refusée et rien n'est envoyé.
+   */
+  async act<T = any>(a: object): Promise<ActResult<T>> {
+    if (this.closed) return { ok: false, code: 'offline', msg: 'Connexion fermée.' };
+    if (this.ws?.readyState === 1 && Date.now() - this.store.get().lastMessageAt > STALE_MS) this.reconnectNow();
+    else this.wake(); // pas d'attente du prochain essai programmé : on se reconnecte maintenant
+    if (!this.ready()) {
+      this.store.update({ waiting: this.store.get().waiting + 1 });
+      const ok = await this.waitOnline(RECONNECT_GRACE_MS);
+      this.store.update({ waiting: Math.max(0, this.store.get().waiting - 1) });
+      if (!ok) return { ok: false, code: 'offline', msg: 'Hors connexion : action non envoyée. Vérifiez le réseau puis réessayez.' };
+    }
+    return this.send<T>(a);
+  }
+
+  private send<T>(a: object): Promise<ActResult<T>> {
+    return new Promise((resolve) => {
       const id = this.nextId++;
       const timer = window.setTimeout(() => {
         this.pending.delete(id);

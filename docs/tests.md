@@ -7,26 +7,36 @@
 | Suite | Contenu | Résultat |
 |---|---|---|
 | Vérification des types | client + serveur (TypeScript strict) | ✅ aucune erreur |
-| Moteur de règles (`test/engine.test.ts`) | règles, transitions, vues filtrées, corrections du MJ | ✅ **51/51** |
-| Modules (`test/modules.test.ts`) | les 11 mini-jeux et 3 réparations (bonne réponse acceptée, mauvaises refusées, réponses papier jamais envoyées), énigmes imprimées, codes et aléatoire, paramètres hors bornes, terrain (génération 1 à 25 pièces, 500 terrains malformés), notifications (contenu public uniquement), outils de test du MJ, abonnements push | ✅ **35/35** |
+| Moteur de règles (`test/engine.test.ts`) | règles, transitions, vues filtrées, corrections du MJ, élimination par choix et contestation, fausses tâches, ordre et proximité des tâches, réunions (majorité, prêt à voter), panne de courant | ✅ **62/62** |
+| Modules (`test/modules.test.ts`) | les 11 mini-jeux et 3 réparations (bonne réponse acceptée, mauvaises refusées, réponses papier jamais envoyées), énigmes imprimées, codes et aléatoire, paramètres hors bornes, terrain (génération 1 à 25 pièces, 500 terrains malformés), notifications (contenu public uniquement), outils de test du MJ, abonnements push, énigmes à questions tirées au hasard, lecture des QR codes | ✅ **40/40** |
+| Connexion (`test/net.test.ts`) | action gardée pendant une reconnexion (faux WebSocket, horloge simulée) : coupure courte, longue, connexion « fantôme » au retour de veille, plusieurs actions, fermeture | ✅ **6/6** |
 | Notifications push (`test/webpush.test.ts`) | chiffrement identique **au vecteur officiel de la RFC 8291**, jeton VAPID vérifié, refus des hôtes inconnus, aller-retour complet (déchiffrement côté téléphone) | ✅ **4/4** |
-| Simulation aléatoire (`test/simulation.test.ts`) | parties complètes jouées par des agents (actions sensées, erreurs, tentatives de triche, pauses, corrections du MJ), invariants vérifiés après **chaque** action, vues de chaque joueur inspectées | ✅ 40 séries par défaut ; **300 séries : 1 010 parties terminées, 91 548 actions invalides refusées, 0 erreur inattendue** (149 victoires par les tâches, 531 par éjection, 26 par parité, 304 par sabotage critique) |
-| Couverture du moteur partagé (`src/shared`) | lignes exécutées par les tests ci-dessus | **96,5 % des lignes, 88,8 % des branches, 98 % des fonctions** |
-| Intégration (`test/integration/game.test.ts`) | vrai serveur local (Worker + Durable Object SQLite) + **41 WebSockets** (MJ + 40 joueurs) | ✅ **17/17** (~56 s) |
-| Navigateur (`test/browser/ui.test.ts`) | Chromium : MJ sur ordinateur et téléphone, 5 téléphones (iPhone 13), parcours complet par l’interface | ✅ **11/11** (~125 s) |
+| Simulation aléatoire (`test/simulation.test.ts`) | parties complètes jouées par des agents (actions sensées, erreurs, tentatives de triche, pauses, corrections du MJ), invariants vérifiés après **chaque** action, vues de chaque joueur inspectées | ✅ 40 séries par défaut ; **300 séries : 1 064 parties terminées, 93 671 actions invalides refusées, 0 erreur inattendue** (111 victoires par les tâches, 565 par éjection, 84 par parité, 304 par sabotage critique) |
+| Couverture du moteur partagé (`src/shared`) | lignes exécutées par les tests ci-dessus | **96,6 % des lignes, 89,1 % des branches, 98,4 % des fonctions** |
+| Intégration (`test/integration/game.test.ts`) | vrai serveur local (Worker + Durable Object SQLite) + **41 WebSockets** (MJ + 40 joueurs) | ✅ **17/17** (~74 s) |
+| Navigateur (`test/browser/ui.test.ts`) | Chromium : MJ sur ordinateur et téléphone, 5 téléphones (iPhone 13) puis 5 en 360×640, caméras simulées filmant de vrais QR codes, coupures réseau réelles, parcours complet par l’interface | ✅ **15/15** (~155 s) |
 
 ### Ce que vérifie le test navigateur
 - Accueil, création de partie, arrivée par le lien d’invitation (pseudonyme seul).
 - Salon : test du son, entraînement local à un mini-jeu.
 - **Onglet Tests du MJ : les 19 étapes de tâches du terrain d’exemple et les 3 réparations (22 vérifications) sont jouées par l’interface et validées par le serveur — les 11 mini-jeux et les 3 réparations sont donc tous exercés de bout en bout.**
 - Préréglage et paramètres, « Faire sonner tous les téléphones » reçu par les 5 téléphones (écran d’alerte).
-- Démarrage, révélation du rôle, vraie tâche par saisie du code d’un poste (et vérification que le téléphone ne reçoit pas la réponse).
-- Élimination par code, corps, signalement, écran d’alerte « RÉUNION ! », rassemblement, vote avec barre de confirmation, annonce du rôle de l’éjecté, écrans « Vous avez gagné / perdu », écran de fin du MJ.
+- Démarrage, révélation du rôle ; **personne n’est envoyé d’abord à la tâche commune** ; l’onglet Rôle a la même apparence pour tous (deux voiles, aucune couleur d’imposteur).
+- **Vraie tâche** par saisie du code : si une seule tâche se fait à ce poste, le mini-jeu s’ouvre d’office (sinon panneau du poste) ; après validation, retour direct à l’onglet Tâches avec « Prochaine étape » ; le téléphone ne reçoit jamais la réponse.
+- **Fausse tâche d’un imposteur** : même message que l’équipier (« Tâche terminée ! » / « Étape validée ! »), compteur de l’onglet qui baisse, liste qui avance ; la barre de l’équipage ne bouge pas.
+- **Caméra réelle simulée** : un Chromium dont la webcam filme un vrai QR code (vidéo générée par le test) ; la caméra s’ouvre seule sur l’onglet Poste, le lecteur décode l’image et la tâche démarre sans aucune saisie. Une 2ᵉ caméra filme l’affiche d’invitation pendant 8 s : message « Ce QR code n’est pas celui d’un poste », **aucun code erroné compté, aucun blocage**.
+- **Coupures réseau réelles** (relais WebSocket contrôlé par le test) : action faite pendant une coupure de 2 s → bandeau « Reconnexion… » immédiat, puis l’action part **une seule fois** au retour ; coupure de plus de 5 s → refus clair, et l’action n’est **jamais** envoyée après coup.
+- **Élimination par choix du pseudonyme** : panneau d’actions neutre (pas de carte de rôle, pas de rouge, pas le mot « IMPOSTEUR »), alliés absents de la liste, barre de confirmation ; la victime n’a rien à saisir, son écran devient un corps (code en très gros + QR code) et **vibre** ; l’imposteur reçoit **une courte vibration** quand son élimination redevient possible.
+- **Corps signalé en filmant le QR code** affiché par le téléphone du corps (2ᵉ caméra simulée), confirmation, écran « RÉUNION ! » sur tous les téléphones, rappel du badge fantôme, rassemblement, **« Prêt à voter » : le vote s’ouvre dès que 3 vivants sur 4 sont prêts** (discussion réglée à 120 s), vote avec barre de confirmation, annonce du rôle de l’éjecté, écrans « Vous avez gagné / perdu », écran de fin du MJ.
 - Nouvelle partie, rechargement de page (rôle conservé), pause, arrêt d’urgence, reprise avec confirmation, cartes joueurs du MJ.
-- Absence de défilement horizontal sur 360×640 (accueil, règles, tableau de bord du MJ sur téléphone), génération du PDF des supports.
+- **Petits écrans 360×640** : accueil, règles, tableau de bord du MJ, puis **chaque onglet de chaque joueur**, le panneau d’actions, la carte de rôle et l’écran du corps (code sur une seule ligne, ≥ 56 px) : aucun défilement horizontal. Génération du PDF des supports.
 - **Aucune erreur JavaScript** sur l’ensemble des pages pendant tout le test.
 
 ## Bugs trouvés et corrigés grâce à ces tests
+- *Version 2 (fluidité)* : la caméra relancée automatiquement relisait en boucle un QR code refusé (affiche d’invitation, fiche d’une autre partie) ; chaque lecture comptait comme code erroné et bloquait le joueur 60 s. Corrigé : un QR code qui n’est ni un poste ni un corps est ignoré sans rien envoyer, et un QR code refusé n’est pas relu pendant 15 s.
+- *Version 2* : le raccourcissement du rassemblement à 15 s annulait une prolongation « +30 s » du MJ à l’arrivée suivante. Corrigé : il ne s’applique qu’une fois.
+- *Version 2* : le code du corps passait à la ligne sur un iPhone (« 246 / 2 »). Corrigé et vérifié en 360 px.
+- *Version 2* : la simulation monopolisait le processus de test au point de dépasser un délai interne de vitest ; elle rend désormais la main entre deux séries.
 - Mini-jeux (interrupteurs, ordre, cibles, câbles, séquence, calibrage) : des appuis très rapides pouvaient être perdus (valeur d’état périmée). Corrigé : chaque appui lit l’état courant et la validation ne part qu’une fois.
 - Test de vote mal écrit (égalité réelle prise pour un bug) et invariants de simulation trop stricts (un fantôme d’équipage a le droit de faire une tâche) : corrigés côté tests, le moteur était juste.
 - Serveurs de test restés actifs entre deux exécutions (faux échecs) : l’arrêt tue désormais tout le groupe de processus et vérifie que le port est libre.
@@ -58,23 +68,40 @@
 | 21 | Reconnexion après actualisation | intégration 21-22 ; navigateur (`reload`) |
 | 22 | Reconnexion après perte réseau | intégration 21-22 |
 | 23 | Accès aux secrets sans autorisation | intégration 23 ; unitaires (clé privée VAPID jamais exposée) |
-| 24 | Modification frauduleuse depuis le navigateur | intégration 24 ; simulation (91 548 actions invalides refusées) |
+| 24 | Modification frauduleuse depuis le navigateur | intégration 24 ; simulation (93 671 actions invalides refusées) |
 | 25 | Permissions d’administration | intégration 25 |
 | 26 | Nombre maximal de joueurs (40) | unitaire ; intégration (+ refus du 41ᵉ) ; simulation (jusqu’à 40) |
 | 27 | Fin de partie et nouvelle partie | unitaire ; intégration ; navigateur ; simulation (enchaînement de parties) |
 
-Autres : outils du MJ (test des tâches via le serveur, test d’alerte, abonnements push) en intégration ; minuteur du serveur (expiration d’un code d’élimination sans aucune action) ; persistance après redémarrage du serveur.
+Autres : outils du MJ (test des tâches via le serveur, test d’alerte, abonnements push) en intégration ; minuteur du serveur (rassemblement raccourci à 15 s par l’alarme du Durable Object dès que la majorité a pointé) ; panne de courant (tâches possibles, signalement refusé) ; contestation d’élimination reçue par le MJ seul ; persistance après redémarrage du serveur.
+
+### Nouveautés de la version 2 et tests correspondants
+| Changement | Unitaires / simulation | Intégration | Navigateur |
+|---|---|---|---|
+| Élimination par choix du pseudonyme, contestation | délais, alliés, morts, partis, soi-même, inconnus, refus sans consommer le délai ; le tueur seul voit sa victime morte ; une contestation par mort ; notifications sans nom | ✅ | ✅ |
+| Panneau d’actions neutre, vibrations « prêt » | — | — | ✅ (vibrations enregistrées) |
+| Fausses tâches identiques | même réponse, même progression, jamais de victoire par les tâches d’un imposteur ; simulation : jamais de progression de la barre | ✅ | ✅ |
+| Ordre personnel, prochaine étape proche | commune jamais en tête (300 tirages), 40 joueurs répartis sur ≥ 4 postes, proximité même pièce/même étage | ✅ | ✅ |
+| Caméra automatique, tâche lancée d’office, prochaine étape | lecture des QR codes (postes, corps, QR inconnus) | — | ✅ caméra simulée |
+| Action gardée pendant la reconnexion | 6 tests avec un faux WebSocket (coupure courte, longue, connexion fantôme au retour de veille, plusieurs actions, fermeture) ; vérifiés par mutation (le test échoue si la logique est retirée) | — | ✅ coupures réelles |
+| Rassemblement 15 s, « Prêt à voter » | majorité, prolongation du MJ respectée, morts/partis non comptés ; simulation : invariants à chaque action | ✅ (alarme) | ✅ |
+| Corps lisible de loin / QR, badge après la réunion | corps disparu : mort non annoncée jusqu’à la réunion | — | ✅ (360 px) |
+| Panne de courant : signalements impossibles | mini-jeu en cours conservé, nouvelles tâches possibles, signalement refusé sans compter d’erreur, possible après réparation | ✅ | — |
+| Énigmes à plusieurs questions | 30 questions par grille, réponses exactes, moitiés cohérentes, jamais de réponse nulle, grille identique à l’ancienne impression (2 000 graines comparées) ; 2 mots par jeu de bandes | ✅ | ✅ (onglet Tests du MJ) |
 
 ## Ce qui n’a PAS pu être testé
 - **Déploiement réel sur Cloudflare** (pas de compte) : les tests tournent sur `wrangler dev`, même moteur (workerd) et mêmes Durable Objects SQLite que la production.
 - **Livraison réelle des notifications push** par Google/Apple/Mozilla : le chiffrement, la signature et le contenu sont testés, mais l’envoi vers ces services et l’affichage sur un vrai téléphone verrouillé ne peuvent pas l’être ici.
-- **Vrais téléphones** (Safari iOS, Chrome Android) : seulement en émulation Chromium. Caméra (lecture de QR) non testée faute de caméra ; la saisie du code, solution de secours, est testée.
-- **Son et vibration réels** : appels exécutés sans erreur, mais l’effet n’est pas mesurable automatiquement.
+- **Vrais téléphones** (Safari iOS, Chrome Android) : seulement en émulation Chromium. La lecture de QR code est testée avec une **caméra simulée** (vidéo d’un vrai QR code, décodée par le lecteur jsQR de l’application) ; BarcodeDetector (Android) et la caméra de Safari ne peuvent pas l’être ici.
+- **Son et vibration réels** : les vibrations demandées sont enregistrées et vérifiées (victime, imposteur « prêt »), mais l’effet physique n’est pas mesurable automatiquement.
 - **Installation PWA** et service worker : actifs uniquement en HTTPS, donc non exercés en local.
 - **Wi-Fi réel** d’une maison avec 40 téléphones, et une soirée avec de vraies personnes : à faire lors d’une partie d’essai.
 
 ## Limites connues
 - Présence physique au poste ou près de la victime non prouvée techniquement (règle d’honneur, journal, arbitrage du MJ).
+- L’élimination par choix du pseudonyme ne prouve pas la proximité : une élimination à distance est interdite par le règlement, la victime peut la contester et le MJ l’annuler.
+- Vibrations « prêt » de l’imposteur et de la victime : Android uniquement (aucune vibration depuis une page web sur iPhone).
+- Les anciennes bandes « puzzle » (une seule lettre par bande) doivent être réimprimées ; les anciennes grilles « inventaire » restent utilisables.
 - iPhone : pas de vibration ; notifications uniquement si le jeu est installé sur l’écran d’accueil.
 - Un téléphone en veille sans notifications ne sonne pas : le MJ annonce les réunions à voix haute.
 - Quotas gratuits remis à zéro chaque jour à 0 h UTC ; une partie de 40 joueurs en consomme quelques pourcents.

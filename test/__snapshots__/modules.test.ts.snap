@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`mini-jeux : chaque défi accepte sa bonne réponse et refuse les mauvaises > inventaire : 30 questions par fiche (6 symboles × 5 zones), réponses exactes, moitiés cohérentes 1`] = `"♦♦●★▲★♦■✚●♦♦★▲■●✚●♦♦●▲♦●●▲■✚●▲✚●■✚●■●✚♦✚★♦★▲★★●♦"`;

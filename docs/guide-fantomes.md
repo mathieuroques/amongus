@@ -3,14 +3,14 @@
 Vous avez été éliminé·e ou éjecté·e : vous êtes un **fantôme**. Vous continuez à aider votre camp, mais **les vivants ne doivent rien apprendre de vous**.
 
 ## Juste après une élimination : le corps
-1. Tapez immédiatement le code que l’imposteur vous montre (onglet Urgence).
+1. Un imposteur vous a touché l’épaule : **vous n’avez rien à taper**, votre téléphone passe tout seul en écran « corps » (il vibre).
 2. **Asseyez-vous sur place**, au calme. Si vous êtes dans un escalier ou un passage, décalez-vous de quelques pas dans la pièce la plus proche.
-3. Restez silencieux·se et immobile, téléphone tourné pour que le **code de corps** soit lisible.
-4. Le corps est découvert quand quelqu’un tape votre code, ou à la prochaine réunion. S’il n’est pas trouvé en 3 minutes, il disparaît : vous devenez un fantôme libre.
-5. Ne révélez jamais qui vous a éliminé·e.
+3. Restez silencieux·se et immobile, écran tourné vers l’extérieur : il affiche votre **code de corps en très gros** et un **QR code**, et reste allumé.
+4. Le corps est découvert quand quelqu’un scanne ce QR code ou tape votre code, ou à la prochaine réunion. Pendant une panne de courant, personne ne peut vous signaler. S’il n’est pas trouvé en 3 minutes, il disparaît : vous devenez un fantôme libre.
+5. Ne révélez jamais qui vous a éliminé·e. Si personne ne vous a touché·e, touchez « Je n’ai pas été touché·e (contester) » : le maître du jeu vient vous parler.
 
 ## Ensuite
-- Accrochez le badge **FANTÔME** bien en vue.
+- Accrochez le badge **FANTÔME** bien en vue **quand votre mort est annoncée** : à la réunion qui suit (l’application vous le rappelle), ou tout de suite si vous avez été éjecté·e. Si votre corps a disparu avant, restez discret·e et sans badge jusqu’à cette réunion : sinon tout le monde saurait que vous êtes mort·e, ce que le jeu ne doit pas encore révéler.
 - **Silence total avec les vivants** : pas de parole, de geste, de mimique, de regard appuyé, de message sur le téléphone, de rire révélateur. Ne restez pas collé·e à un vivant.
 - Vous pouvez parler à voix basse avec d’autres fantômes, loin des vivants.
 - **Fantôme d’équipage** : terminez vos tâches, elles comptent pour la victoire.
