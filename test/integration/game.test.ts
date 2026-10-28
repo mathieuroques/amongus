@@ -14,7 +14,7 @@ const SETTINGS = {
   discussionSec: 0,
   votingSec: 15,
   resultSec: 5,
-  doorsSec: 10,
+  killCodeTtlSec: 15,
   initialSabotageCooldownSec: 5,
   sabotageCooldownSec: 10,
   bodyTimeoutSec: 0,
@@ -212,17 +212,61 @@ describe('parcours complet multi-téléphones', () => {
     expect(gm.state.taskBar.done).toBe(before + 1);
   }, 20_000);
 
-  it('10-11. sabotage autorisé, refusé, et fin automatique par le minuteur du serveur', async () => {
+  it('10-11. sabotage autorisé, refusé (doublon, équipier, « salle condamnée » supprimée), réparation', async () => {
     const imps = phones.filter((p) => role(p) === 'impostor');
+    const crew = phones.filter((p) => role(p) === 'crewmate');
     await sleep(5_200); // délai initial des sabotages
-    const room = gm.state.terrain.rooms.find((r: any) => !r.forbidden && !r.transit && r.id !== gm.state.terrain.meetingRoomId);
-    const r = await imps[0].act({ type: 'sabotage', kind: 'doors', roomId: room.id });
+    expect((await imps[0].act({ type: 'sabotage', kind: 'doors' })).code).toBe('unavailable');
+    expect((await crew[0].act({ type: 'sabotage', kind: 'comms' })).code).toBe('forbidden');
+    const r = await imps[0].act({ type: 'sabotage', kind: 'comms' });
     expect(r.ok, r.msg).toBe(true);
     expect((await imps[1].act({ type: 'sabotage', kind: 'lights' })).code).toBe('busy');
-    await phones[0].waitState((s) => s.sabotage?.kind === 'doors' && s.sabotage.roomId === room.id);
-    // aucune action : c'est l'alarme du Durable Object qui doit rouvrir la salle
-    await phones[0].waitState((s) => !s.sabotage, 15_000);
-    await gm.waitState((s) => s.log.some((l: any) => /Salle condamnée.*terminé/.test(l.msg)));
+    const hidden = await crew[1].waitState((s) => s.sabotage?.kind === 'comms');
+    expect(hidden.me.tasks).toBeUndefined();
+    // réparation au poste Radio par un équipier
+    const fix = await crew[1].act({ type: 'fixStart', code: station('comms').code });
+    expect(fix.ok, fix.msg).toBe(true);
+    await sleep(fix.data.minMs + 50);
+    expect((await crew[1].act({ type: 'submit', challengeId: fix.data.id, answer: fix.data.params.target })).data).toEqual({ fixed: true });
+    await crew[2].waitState((s) => !s.sabotage && s.me.tasks);
+  }, 30_000);
+
+  it('minuteurs du serveur : un code d’élimination expire tout seul (alarme du Durable Object)', async () => {
+    const imp = phones.filter((p) => role(p) === 'impostor')[2];
+    const a = await imp.act({ type: 'arm' });
+    expect(a.ok, a.msg).toBe(true);
+    await imp.waitState((s) => s.me.killCode?.code === a.data.code);
+    // aucune action de personne : l'alarme doit retirer le code après 15 s
+    await imp.waitState((s) => !s.me.killCode, 20_000);
+  }, 30_000);
+
+  it('outils du MJ : test d’une tâche via le serveur, test d’alerte, abonnements push', async () => {
+    const t = gm.state.terrain.tasks.find((x: any) => x.enabled && x.steps[0].game === 'count');
+    const r = await gm.act({ type: 'testTask', taskId: t.id, stepIndex: 0 });
+    expect(r.ok, r.msg).toBe(true);
+    expect(r.data.expected).toBe(countPuzzle(t.seed).answer);
+    await sleep(r.data.minMs + 50);
+    expect((await gm.act({ type: 'testSubmit', challengeId: r.data.id, answer: '999' })).code).toBe('wrong');
+    expect((await gm.act({ type: 'testSubmit', challengeId: r.data.id, answer: r.data.expected })).ok).toBe(true);
+    // la partie n'est pas affectée
+    expect(gm.state.phase).toBe('playing');
+    // test d'alerte : tous les téléphones reçoivent le nouveau compteur
+    const before = phones[0].state.pingId;
+    expect((await gm.act({ type: 'ping' })).ok).toBe(true);
+    await Promise.all(phones.map((p) => p.waitState((s) => s.pingId === before + 1)));
+    // abonnement push : hôte inconnu refusé, service officiel accepté, visible du MJ uniquement
+    const keys = { p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' };
+    expect((await phones[3].act({ type: 'pushSubscribe', subscription: { endpoint: 'https://attaquant.example/x', keys } })).code).toBe('bad_push');
+    expect((await phones[3].act({ type: 'pushSubscribe', subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/test', keys } })).ok).toBe(true);
+    await gm.waitState((s) => s.players.find((p: any) => p.id === phones[3].playerId).push === true);
+    expect(phones[3].state.pushOn).toBe(true);
+    expect(phones[3].state.pushKey).toMatch(/^[A-Za-z0-9_-]{80,}$/);
+    expect(JSON.stringify(phones[4].state)).not.toContain('fcm.googleapis.com');
+    await phones[3].act({ type: 'pushUnsubscribe' });
+    // message de visibilité (application en arrière-plan) accepté sans effet de bord
+    phones[5].send({ t: 'vis', visible: false });
+    phones[5].send({ t: 'vis', visible: true });
+    expect((await phones[5].act({ type: 'cancelChallenge' })).ok).toBe(true);
   }, 30_000);
 
   it('12-13. délai d’élimination respecté, pas de double élimination', async () => {

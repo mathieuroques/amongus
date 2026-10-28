@@ -18,7 +18,7 @@
    - pour les énigmes « puzzle », découpez les bandes et laissez-les en vrac à côté de la fiche ;
    - le « scan médical » : collez un repère (croix en adhésif) au sol devant la fiche, dans un endroit visible.
 5. **Étiqueter** les pièces, les passages et les zones interdites (panneaux imprimés).
-6. **Vérifier** chaque fiche : onglet Terrain → « Vérifier une fiche imprimée » et scanner chaque QR code.
+6. **Vérifier** chaque fiche (onglet 🧪 Tests → « Vérifier une fiche posée ») puis **tester** chaque tâche dans le même onglet.
 7. Éclairage : toutes les zones de jeu restent allumées.
 8. Prévoir un **point de rassemblement** (souvent la salle de réunion) et vérifier que les sorties sont dégagées.
 

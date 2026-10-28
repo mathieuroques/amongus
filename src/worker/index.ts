@@ -39,7 +39,7 @@ async function createGame(req: Request, env: Env): Promise<Response> {
     const stub = env.GAMES.get(env.GAMES.idFromName(code));
     const res = await stub.fetch('https://game/init', {
       method: 'POST',
-      body: JSON.stringify({ code, gmTokenHash, gmSecretHash, settings: body.settings, terrain: body.terrain }),
+      body: JSON.stringify({ code, gmTokenHash, gmSecretHash, settings: body.settings, terrain: body.terrain, origin: new URL(req.url).origin }),
     });
     if (res.status === 409) continue; // collision : on retente avec un autre code
     if (!res.ok) return json({ error: 'Création impossible.' }, 500);

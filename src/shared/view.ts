@@ -4,7 +4,7 @@
 // les votes individuels avant la révélation, ni le journal secret.
 
 import { GAMES, SABOTAGE_INFO } from './catalog';
-import { bodyPending, challengeView, inGame, taskProgress, type ChallengeView } from './engine';
+import { bodyPending, challengeView, gmChallengeView, inGame, taskProgress, type ChallengeView } from './engine';
 import { availableSabotages } from './terrain';
 import type {
   GameState, LogEntry, Meeting, MeetingStage, Passage, Phase, PlayerState, Role, Room, SabotageKind, SafetyAlert, Settings,
@@ -38,9 +38,6 @@ export interface SabotageView {
   label: string;
   critical: boolean;
   deadline?: number;
-  endsAt?: number;
-  roomName?: string;
-  roomId?: string;
   stations: { name: string; roomName: string; fixed: boolean; held: boolean }[];
 }
 
@@ -89,7 +86,7 @@ export interface EndView {
     tally: { name: string; votes: number }[];
     votes?: { voter: string; target: string }[];
   }[];
-  sabotages: { label: string; byName: string; at: number; outcome: string; roomName?: string }[];
+  sabotages: { label: string; byName: string; at: number; outcome: string }[];
   kills: { at: number; killer: string; victim: string }[];
   taskBar: number;
   durationSec: number;
@@ -144,6 +141,10 @@ export interface PlayerView {
   sabotage?: SabotageView;
   meeting?: MeetingView;
   end?: EndView;
+  /** Clé publique VAPID pour s'abonner aux notifications de cette partie. */
+  pushKey?: string;
+  pushOn: boolean;
+  pingId: number;
 }
 
 export interface GmPlayer {
@@ -168,6 +169,7 @@ export interface GmPlayer {
   blockedUntil: number;
   voted: boolean;
   inChallenge?: string;
+  push: boolean;
 }
 
 export interface GmView {
@@ -192,6 +194,9 @@ export interface GmView {
   log: LogEntry[];
   end?: EndView;
   startedAt?: number;
+  pushKey?: string;
+  pingId: number;
+  gmChallenge?: ReturnType<typeof gmChallengeView>;
 }
 
 const roomName = (s: GameState, id?: string) => s.terrain.rooms.find((r) => r.id === id)?.name ?? '';
@@ -219,16 +224,13 @@ function taskList(s: GameState, p: PlayerState): MyTask[] {
 function sabotageView(s: GameState, now: number): SabotageView | undefined {
   const sab = s.sabotage;
   if (!sab) return undefined;
-  const kindStations = sab.kind === 'doors' ? [] : s.terrain.stations.filter((x) => x.kind === sab.kind);
+  const kindStations = s.terrain.stations.filter((x) => x.kind === sab.kind);
   const fresh = sab.holds.filter((h) => h.beat > now - 5000);
   return {
     kind: sab.kind,
     label: SABOTAGE_INFO[sab.kind].label,
     critical: SABOTAGE_INFO[sab.kind].critical,
     deadline: sab.deadline,
-    endsAt: sab.endsAt,
-    roomId: sab.roomId,
-    roomName: sab.roomId ? roomName(s, sab.roomId) : undefined,
     stations: kindStations.map((x) => ({
       name: x.name,
       roomName: roomName(s, x.roomId),
@@ -291,7 +293,7 @@ function endView(s: GameState): EndView | undefined {
       tally: Object.entries(m.result?.tally ?? {}).map(([id, n]) => ({ name: nameOf(s, id), votes: n })).sort((a, b) => b.votes - a.votes),
       votes: s.settings.anonymousVotes ? undefined : Object.entries(m.votes).map(([v, t]) => ({ voter: nameOf(s, v), target: nameOf(s, t) })),
     })),
-    sabotages: s.sabotageHistory.map((h) => ({ label: SABOTAGE_INFO[h.kind].label, byName: nameOf(s, h.by), at: h.at, outcome: h.outcome, roomName: h.roomId ? roomName(s, h.roomId) : undefined })),
+    sabotages: s.sabotageHistory.map((h) => ({ label: SABOTAGE_INFO[h.kind].label, byName: nameOf(s, h.by), at: h.at, outcome: h.outcome })),
     kills: s.players.filter((p) => p.deathCause === 'killed' && p.killedBy).map((p) => ({ at: p.diedAt ?? 0, killer: nameOf(s, p.killedBy), victim: p.name })).sort((a, b) => a.at - b.at),
     taskBar: total ? done / total : 0,
     durationSec: Math.round(((s.endedAt ?? 0) - (s.startedAt ?? s.endedAt ?? 0)) / 1000),
@@ -382,6 +384,9 @@ export function viewForPlayer(s: GameState, playerId: string, now: number): Play
     sabotage: started ? sabotageView(s, now) : undefined,
     meeting: meetingView(s, me),
     end: endView(s),
+    pushKey: s.vapid?.publicKey,
+    pushOn: !!me.push,
+    pingId: s.pingId ?? 0,
   };
   if (isImp) {
     view.allies = s.players.filter((p) => p.role === 'impostor' && p.id !== me.id && !p.kicked).map((p) => ({ id: p.id, name: p.name, num: p.num, status: realStatus(p) }));
@@ -430,6 +435,7 @@ export function viewForGm(s: GameState, now: number, connected: Set<string>): Gm
       blockedUntil: p.blockedUntil,
       voted: !!s.meeting?.votes[p.id],
       inChallenge: p.challenge ? p.challenge.game : undefined,
+      push: !!p.push,
     })),
     taskBar: taskProgress(s),
     emergencyCooldownUntil: s.emergencyCooldownUntil,
@@ -447,6 +453,9 @@ export function viewForGm(s: GameState, now: number, connected: Set<string>): Gm
     log: s.log.slice(-400),
     end: endView(s),
     startedAt: s.startedAt,
+    pushKey: s.vapid?.publicKey,
+    pingId: s.pingId ?? 0,
+    gmChallenge: gmChallengeView(s),
   };
 }
 

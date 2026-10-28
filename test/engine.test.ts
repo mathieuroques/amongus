@@ -563,15 +563,18 @@ describe('sabotages', () => {
     expect(s.meeting!.endedSabotage).toBe('oxygen');
   });
 
-  it('portes : la salle est condamnée puis se rouvre seule', () => {
-    const s = setup(10, 2, { doorsSec: 20 });
+  it('le sabotage « salle condamnée » n\u2019existe plus (irréalisable dans une vraie maison)', () => {
+    const s = setup(10, 2);
     advance(15_000);
-    const room = s.terrain.rooms.find((r) => !r.forbidden && !r.transit && r.id !== s.terrain.meetingRoomId)!;
-    expect(err(() => act(s, imps(s)[0], { type: 'sabotage', kind: 'doors', roomId: s.terrain.meetingRoomId }))).toBe('bad_room');
-    act(s, imps(s)[0], { type: 'sabotage', kind: 'doors', roomId: room.id });
-    advance(20_000);
-    tick(s, clock);
-    expect(s.sabotage).toBeUndefined();
+    expect(err(() => act(s, imps(s)[0], { type: 'sabotage', kind: 'doors' as never }))).toBe('unavailable');
+    expect(viewForPlayer(s, imps(s)[0].id, clock).sabotageOptions).toEqual(['reactor', 'oxygen', 'lights', 'comms']);
+  });
+
+  it('bouton d\u2019urgence bloqué pendant tout sabotage', () => {
+    const s = setup(10, 2, { emergencyCooldownSec: 0 });
+    advance(15_000);
+    act(s, imps(s)[0], { type: 'sabotage', kind: 'comms' });
+    expect(err(() => act(s, crew(s)[0], { type: 'callEmergency', code: stationOf(s, 'emergency').code }))).toBe('cannot_call');
   });
 });
 

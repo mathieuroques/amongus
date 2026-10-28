@@ -146,7 +146,7 @@ function AssembleBlock({ seed, name }: { seed: number; name: string }) {
 }
 
 const SPECIAL_HELP: Record<string, string> = {
-  emergency: 'Pour convoquer une réunion d’urgence : scannez ce poste puis appuyez sur le bouton rouge. Impossible pendant un sabotage (sauf salle condamnée).',
+  emergency: 'Pour convoquer une réunion d’urgence : scannez ce poste puis appuyez sur le bouton rouge. Impossible pendant un sabotage.',
   reactor: `${SABOTAGE_INFO.reactor.short} Scannez ce poste puis maintenez le bouton appuyé jusqu’à la réparation.`,
   oxygen: `${SABOTAGE_INFO.oxygen.short} Scannez ce poste et recopiez le code affiché sur votre téléphone.`,
   lights: `${SABOTAGE_INFO.lights.short} Ceci est un poste FICTIF : ne touchez jamais au vrai tableau électrique.`,
@@ -247,7 +247,7 @@ function SummarySheet({ v }: { v: GmView }) {
           <strong>Fantômes</strong> : silence total avec les vivants, badge visible. L’équipage fantôme finit ses tâches ; l’imposteur fantôme peut saboter. Pas de vote, pas de signalement, pas de réparation.
         </li>
         <li>
-          <strong>Sabotages</strong> : réacteur ({s.reactorSec} s, 2 personnes en même temps), oxygène ({s.oxygenSec} s, 2 postes), panne de courant (postes de tâches hors service), communications (liste des tâches masquée), salle condamnée ({s.doorsSec} s, on n’y entre pas).
+          <strong>Sabotages</strong> : réacteur ({s.reactorSec} s, 2 personnes en même temps), oxygène ({s.oxygenSec} s, 2 postes), panne de courant (postes de tâches hors service), communications (liste des tâches masquée).
         </li>
         <li>
           <strong>Sécurité</strong> : on ne court jamais, aucune porte verrouillée, zones interdites respectées, aucun contact brusque. Bouton « Alerte sécurité » dans l’onglet Urgence. Le maître du jeu peut tout arrêter.

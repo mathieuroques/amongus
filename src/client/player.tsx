@@ -1,40 +1,43 @@
 // Interface des joueurs (équipage, imposteurs, fantômes).
+// Principe d'ergonomie : à chaque instant, l'écran dit quoi faire ensuite, en gros, en une ligne.
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { GAMES, SABOTAGE_INFO, TASK_TYPE_LABEL } from '../shared/catalog';
 import type { ChallengeView } from '../shared/engine';
-import type { PlayerView } from '../shared/view';
+import type { MyTask, PlayerView } from '../shared/view';
+import { usePlayerAlerts } from './alerts';
+import { AlertOverlay, AlertSetup } from './alerts-ui';
 import { dropPlayer, go } from './conn';
 import { GameView, gameInfo } from './games';
 import type { Connection } from './net';
+import { Practice } from './practice';
 import { Scanner } from './scanner';
 import { useStore, useTick } from './store';
-import {
-  ActButton, Bar, beep, buzz, CodeForm, Countdown, fmtSec, Modal, NetBadge, OfflineBanner, Reveal, toast, unlockAudio, WakeLockToggle,
-} from './ui';
+import { ActButton, Bar, buzz, CodeForm, Collapse, Countdown, fmtSec, Modal, NetBadge, OfflineBanner, Reveal, toast, unlockAudio } from './ui';
 
 type Conn = Connection<PlayerView>;
 
-const roleLabel = (r?: string) => (r === 'impostor' ? 'Imposteur' : 'Membre d’équipage');
+const roleLabel = (r?: string) => (r === 'impostor' ? 'Imposteur' : 'Équipage');
 
 export function PlayerApp({ conn }: { conn: Conn }) {
   const st = useStore(conn.store);
   const v = st.view;
-  useAlerts(v);
+  usePlayerAlerts(v);
 
   if (st.kicked)
     return (
       <div class="wrap stack center">
         <h1>Vous avez été retiré·e de la partie</h1>
         <p>Le maître du jeu vous a exclu·e, ou votre session a été transférée sur un autre appareil.</p>
-        <button class="btn block" onClick={() => (dropPlayer(), go('/'))}>
+        <button class="btn block big" onClick={() => (dropPlayer(), go('/'))}>
           Retour à l’accueil
         </button>
       </div>
     );
   if (!v)
     return (
-      <div class="wrap stack center">
+      <div class="wrap stack center" style={{ paddingTop: '20vh' }}>
+        <span class="spinner big" />
         <h2>Connexion à la partie {conn.code}…</h2>
         {st.error && <p class="card danger">{st.error.msg}</p>}
         {st.error?.code === 'bad_token' && (
@@ -48,17 +51,21 @@ export function PlayerApp({ conn }: { conn: Conn }) {
   return (
     <>
       <div class="topbar">
-        <span class="num">{v.me.num}</span>
+        <span class="num" aria-label="Votre numéro">
+          {v.me.num}
+        </span>
         <span class="title grow">{v.me.name}</span>
-        <small>{v.code}</small>
+        {!v.me.alive && v.phase !== 'lobby' && v.phase !== 'ended' && <span class="badge dead">👻 fantôme</span>}
         <NetBadge status={st.status} />
       </div>
       <OfflineBanner status={st.status} />
+      <AlertOverlay />
       {v.emergencyStop && <StopScreen />}
       {v.paused && !v.emergencyStop && (
         <div class="pause">
-          <h1>⏸ Pause</h1>
-          <p>Le maître du jeu a mis la partie en pause. Restez où vous êtes, toutes les actions sont suspendues.</p>
+          <div style={{ fontSize: '3rem' }}>⏸</div>
+          <h1>Pause</h1>
+          <p>Le maître du jeu a mis la partie en pause. Restez où vous êtes : toutes les actions et tous les comptes à rebours sont suspendus.</p>
         </div>
       )}
       <PlayerBody v={v} conn={conn} />
@@ -76,60 +83,26 @@ function StopScreen() {
   );
 }
 
-/** Sons et vibrations lors des événements importants. */
-function useAlerts(v?: PlayerView) {
-  const prev = useRef<{ phase?: string; sab?: string; meetingId?: number; stop?: boolean }>({});
-  useEffect(() => {
-    if (!v) return;
-    const p = prev.current;
-    if (v.phase === 'meeting' && v.meeting && p.meetingId !== v.meeting.id) {
-      beep(660, 220, 3);
-      buzz([400, 150, 400, 150, 400]);
-    }
-    const sab = v.sabotage?.kind;
-    if (sab && p.sab !== sab) {
-      if (v.sabotage!.critical) {
-        beep(990, 160, 4);
-        buzz([200, 100, 200, 100, 200, 100, 200]);
-      } else {
-        beep(520, 160, 2);
-        buzz([150, 80, 150]);
-      }
-    }
-    if (v.emergencyStop && !p.stop) {
-      beep(440, 400, 3);
-      buzz([600, 200, 600]);
-    }
-    if (v.phase === 'playing' && p.phase === 'lobby') buzz(300);
-    prev.current = { phase: v.phase, sab, meetingId: v.meeting?.id, stop: v.emergencyStop };
-  }, [v]);
-}
-
 function PlayerBody({ v, conn }: { v: PlayerView; conn: Conn }) {
   const seenKey = `imposteurs.seen.${v.code}.${v.gameNumber}.${v.me.id}`;
-  const [seen, setSeen] = useState(() => {
+  const read = () => {
     try {
       return !!localStorage.getItem(seenKey);
     } catch {
       return false;
     }
-  });
-  useEffect(() => {
-    try {
-      setSeen(!!localStorage.getItem(seenKey));
-    } catch {
-      /* ignore */
-    }
-  }, [seenKey]);
+  };
+  const [seen, setSeen] = useState(read);
+  useEffect(() => setSeen(read()), [seenKey]);
 
   if (v.phase === 'lobby') return <Lobby v={v} conn={conn} />;
-  if (v.phase === 'ended') return <EndScreen v={v} conn={conn} />;
+  if (v.phase === 'ended') return <EndScreen v={v} />;
   if (!v.me.role)
     return (
       <div class="wrap stack">
         <div class="card">
           <h2>Partie en cours</h2>
-          <p>Vous ne participez pas à cette manche. Attendez la prochaine partie : le maître du jeu vous y ajoutera automatiquement.</p>
+          <p>Vous ne participez pas à cette manche. Restez connecté·e : vous serez automatiquement dans le salon de la prochaine partie.</p>
         </div>
       </div>
     );
@@ -163,13 +136,46 @@ function Lobby({ v, conn }: { v: PlayerView; conn: Conn }) {
   return (
     <div class="wrap stack">
       <div class="card ok center">
-        <h2>Vous êtes dans le salon</h2>
-        <p>
-          Partie <strong>{v.code}</strong> — en attente du lancement par le maître du jeu.
+        <div style={{ fontSize: '2.2rem' }}>✅</div>
+        <h2 style={{ margin: '4px 0' }}>Vous êtes inscrit·e, {v.me.name} !</h2>
+        <p style={{ margin: 0 }}>
+          Partie <strong>{v.code}</strong> · {v.players.length} joueur(s) · en attente du lancement par le maître du jeu.
         </p>
       </div>
-      <div class="card">
-        <h3>Joueurs ({v.players.length})</h3>
+      <h3 style={{ marginBottom: 0 }}>En attendant, préparez votre téléphone :</h3>
+      <AlertSetup conn={conn} pushKey={v.pushKey} pushOnServer={v.pushOn} />
+      <Collapse title="📷 Tester l’appareil photo (lecture des QR codes)">
+        <Scanner
+          onCode={async (raw) => {
+            toast(`QR code lu (${raw.slice(-20)}) : votre téléphone est prêt !`, 'ok');
+            return true;
+          }}
+        />
+      </Collapse>
+      <Collapse title="🎮 S’entraîner aux mini-jeux">
+        <p class="muted">Pour découvrir les tâches avant la partie (rien n’est compté).</p>
+        <Practice />
+      </Collapse>
+      <a class="btn block big" href="#/regles">
+        📖 Les règles en 2 minutes
+      </a>
+      <SafetyCard v={v} />
+      <Collapse title={`🏠 Le terrain : ${v.terrain.name}`}>
+        <p>
+          Salle de réunion : <strong>{meeting?.name}</strong>
+        </p>
+        {forbidden.length > 0 && (
+          <p>
+            <span class="badge imp">⛔ Interdit</span> {forbidden.map((r) => r.name).join(', ')}
+          </p>
+        )}
+        {transit.length > 0 && (
+          <p>
+            <span class="badge warn">🚶 Passages : on marche, aucune élimination</span> {transit.map((r) => r.name).join(', ')}
+          </p>
+        )}
+      </Collapse>
+      <Collapse title="👥 Joueurs inscrits" count={v.players.length}>
         <ul class="list">
           {v.players.map((p) => (
             <li key={p.id}>
@@ -179,46 +185,20 @@ function Lobby({ v, conn }: { v: PlayerView; conn: Conn }) {
             </li>
           ))}
         </ul>
-      </div>
-      <SafetyCard v={v} />
-      <div class="card">
-        <h3>Le terrain : {v.terrain.name}</h3>
-        <p>
-          Salle de réunion : <strong>{meeting?.name}</strong>
-        </p>
-        {forbidden.length > 0 && (
-          <p>
-            <span class="badge imp">Zones interdites</span> {forbidden.map((r) => r.name).join(', ')}
-          </p>
-        )}
-        {transit.length > 0 && (
-          <p>
-            <span class="badge warn">Passages (on marche, aucune élimination)</span> {transit.map((r) => r.name).join(', ')}
-          </p>
-        )}
-      </div>
-      <a class="btn block" href="#/regles">
-        📖 Lire les règles
-      </a>
-      <details class="card">
-        <summary>📷 Tester mon appareil photo (lecture de QR code)</summary>
-        <div style={{ marginTop: '12px' }}>
-          <Scanner
-            onCode={async (raw) => {
-              toast(`QR code lu : ${raw.slice(-24)}. Votre téléphone est prêt !`, 'ok');
-              return true;
-            }}
-          />
-        </div>
-      </details>
-      <ActButton class="block" confirm="Quitter le salon ?" run={async () => {
-        const r = await conn.act({ type: 'leave' });
-        if (r.ok) {
-          dropPlayer();
-          go('/');
-        }
-        return r;
-      }}>
+      </Collapse>
+      <ActButton
+        class="block"
+        confirm="Quitter le salon ?"
+        confirmOk="Quitter"
+        run={async () => {
+          const r = await conn.act({ type: 'leave' });
+          if (r.ok) {
+            dropPlayer();
+            go('/');
+          }
+          return r;
+        }}
+      >
         Quitter le salon
       </ActButton>
     </div>
@@ -228,8 +208,8 @@ function Lobby({ v, conn }: { v: PlayerView; conn: Conn }) {
 function SafetyCard({ v }: { v: PlayerView }) {
   return (
     <div class="card warn">
-      <h3>⚠️ Sécurité</h3>
-      <p style={{ whiteSpace: 'pre-wrap' }}>{v.terrain.safetyNotes || 'Ne courez pas, ne verrouillez aucune porte, respectez les zones interdites.'}</p>
+      <h3 style={{ marginTop: 0 }}>⚠️ Sécurité</h3>
+      <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{v.terrain.safetyNotes || 'Ne courez pas, ne verrouillez aucune porte, respectez les zones interdites.'}</p>
     </div>
   );
 }
@@ -241,9 +221,9 @@ function RoleReveal({ v, onDone }: { v: PlayerView; onDone: () => void }) {
     <div class="overlay">
       <div class="wrap stack">
         {!shown ? (
-          <button class="veil" style={{ width: '100%', minHeight: '60dvh', border: 'none', color: 'inherit' }} onClick={() => (unlockAudio(), setShown(true))}>
+          <button class="veil" style={{ width: '100%', minHeight: '70dvh', border: 'none', color: 'inherit' }} onClick={() => (unlockAudio(), setShown(true))}>
             <div>
-              <div style={{ fontSize: '3rem' }}>🤫</div>
+              <div style={{ fontSize: '3.5rem' }}>🤫</div>
               <h2>La partie commence !</h2>
               <p>Cachez votre écran des autres joueurs, puis touchez ici pour découvrir votre rôle.</p>
             </div>
@@ -293,34 +273,25 @@ function RoleCard({ v }: { v: PlayerView }) {
 
 // ------------------------------------------------------------------- Sabotages
 function SabotageAlarm({ v, conn }: { v: PlayerView; conn: Conn }) {
-  const now = conn.serverNow();
   useTick(500);
+  const now = conn.serverNow();
   const s = v.sabotage;
   if (!s || v.phase !== 'playing') return null;
   return (
     <div class={`alarm ${s.critical ? 'critical' : 'normal'}`} role="alert">
-      <span style={{ fontSize: '1.4rem' }}>{s.critical ? '🚨' : '⚠️'}</span>
+      <span style={{ fontSize: '1.5rem' }}>{s.critical ? '🚨' : '⚠️'}</span>
       <div class="grow">
         <div>
           {s.label}
-          {s.roomName ? ` : ${s.roomName}` : ''}
           {s.deadline && (
             <>
               {' '}
               — <Countdown until={s.deadline} now={now} />
             </>
           )}
-          {s.endsAt && (
-            <>
-              {' '}
-              — <Countdown until={s.endsAt} now={now} />
-            </>
-          )}
         </div>
         <small style={{ color: 'inherit' }}>
-          {s.kind === 'doors'
-            ? 'Personne n’entre dans cette salle. Les portes restent ouvertes : on peut toujours en sortir.'
-            : s.stations.map((x) => `${x.name} (${x.roomName})${x.fixed ? ' ✓' : x.held ? ' ✋' : ''}`).join(' · ')}
+          {SABOTAGE_INFO[s.kind].short} {s.stations.map((x) => `${x.name} (${x.roomName})${x.fixed ? ' ✓' : x.held ? ' ✋' : ''}`).join(' · ')}
         </small>
       </div>
     </div>
@@ -340,9 +311,11 @@ function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
   useEffect(() => {
     if (pending) setTab('scan');
   }, [pending]);
+  useEffect(() => window.scrollTo(0, 0), [tab]);
 
   if (v.me.challenge) return <ChallengeScreen v={v} c={v.me.challenge} conn={conn} />;
   if (v.me.bodyPending) return <BodyScreen v={v} conn={conn} />;
+  const left = v.me.tasks?.filter((t) => !t.done).length;
 
   return (
     <>
@@ -350,28 +323,29 @@ function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
         {!v.me.alive && (
           <div class="card ghost">
             <strong>👻 Vous êtes un fantôme.</strong>{' '}
-            {v.me.role === 'impostor'
-              ? 'Vous pouvez encore saboter (onglet Rôle), mais plus éliminer.'
-              : 'Terminez vos tâches pour aider l’équipage.'}{' '}
-            Silence total avec les vivants : ni parole, ni geste, ni regard appuyé.
+            {v.me.role === 'impostor' ? 'Vous pouvez encore saboter (onglet Rôle), mais plus éliminer.' : 'Terminez vos tâches pour aider l’équipage.'} Silence total avec
+            les vivants, badge FANTÔME visible.
           </div>
         )}
-        {tab === 'tasks' && <TasksTab v={v} />}
+        {tab === 'tasks' && <TasksTab v={v} goScan={() => setTab('scan')} />}
         {tab === 'scan' && <ScanTab v={v} conn={conn} initial={pending} onConsumed={() => setPending(undefined)} />}
-        {tab === 'urgent' && <UrgentTab v={v} conn={conn} />}
+        {tab === 'urgent' && <UrgentTab v={v} conn={conn} goScan={() => setTab('scan')} />}
         {tab === 'role' && <RoleTab v={v} conn={conn} />}
       </div>
       <nav class="tabs" aria-label="Navigation">
         {(
           [
-            ['tasks', '📋', 'Tâches'],
-            ['scan', '📷', 'Poste'],
-            ['urgent', '🚨', 'Urgence'],
-            ['role', '🎭', 'Rôle'],
+            ['tasks', '📋', 'Tâches', left ? String(left) : undefined],
+            ['scan', '📷', 'Poste', undefined],
+            ['urgent', '🚨', 'Urgence', undefined],
+            ['role', '🎭', 'Rôle', undefined],
           ] as const
-        ).map(([k, ico, label]) => (
-          <button key={k} class={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
-            <span class="ico">{ico}</span>
+        ).map(([k, ico, label, badge]) => (
+          <button key={k} class={tab === k ? 'on' : ''} onClick={() => setTab(k)} aria-current={tab === k ? 'page' : undefined}>
+            <span class="ico">
+              {ico}
+              {badge && <span class="tab-badge">{badge}</span>}
+            </span>
             {label}
           </button>
         ))}
@@ -384,55 +358,100 @@ function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
 function TaskBarCard({ v }: { v: PlayerView }) {
   if (v.taskBar === undefined) {
     if (v.sabotage?.kind === 'comms') return <div class="card warn">📡 Communications coupées : progression indisponible.</div>;
-    return v.settings.taskBarUpdates === 'never' ? null : null;
+    return null;
   }
   return (
     <div class="card">
       <div class="row">
         <strong class="grow">Progression de l’équipage</strong>
-        <span>{Math.round(v.taskBar * 100)} %</span>
+        <span class="big-num">{Math.round(v.taskBar * 100)} %</span>
       </div>
-      <Bar value={v.taskBar} />
+      <Bar value={v.taskBar} label="Progression de l’équipage" />
       {v.settings.taskBarUpdates === 'meetings' && <small>Mise à jour uniquement pendant les réunions.</small>}
     </div>
   );
 }
 
-function TasksTab({ v }: { v: PlayerView }) {
-  const tasks = v.me.tasks;
+function where(t: MyTask) {
+  return t.next ? `${t.next.roomName}${t.next.floor ? ` (${t.next.floor})` : ''}` : '';
+}
+
+function TasksTab({ v, goScan }: { v: PlayerView; goScan: () => void }) {
+  const tasks = v.me.tasks ?? [];
+  const todo = tasks.filter((t) => !t.done);
+  const done = tasks.filter((t) => t.done);
+  // regroupement par pièce : on voit d'un coup d'œil où aller
+  const rooms = new Map<string, MyTask[]>();
+  for (const t of todo) rooms.set(where(t), [...(rooms.get(where(t)) ?? []), t]);
+  const next = todo[0];
   return (
     <>
+      {v.me.tasksHidden ? (
+        <div class="card warn">
+          <h2 style={{ marginTop: 0 }}>📡 Communications coupées</h2>
+          <p>Votre liste de tâches est indisponible. Vous pouvez faire une tâche dont vous vous souvenez du poste, ou aller réparer au poste Radio.</p>
+        </div>
+      ) : next ? (
+        <button class="card next-step" onClick={goScan}>
+          <small>Prochaine étape</small>
+          <strong>{next.name}</strong>
+          <span>
+            📍 {where(next)} — {next.next?.stationName}
+          </span>
+          <span class="muted">Une fois sur place, touchez ici pour scanner le poste →</span>
+        </button>
+      ) : (
+        <div class="card ok center">
+          <h2 style={{ margin: 0 }}>✅ Toutes vos tâches sont faites !</h2>
+          <p style={{ margin: 0 }}>{v.me.role === 'impostor' ? 'Continuez à faire semblant…' : 'Observez, protégez les autres et aidez à réparer les sabotages.'}</p>
+        </div>
+      )}
       <TaskBarCard v={v} />
-      <div class="card">
-        <h2>Mes tâches</h2>
-        {v.me.tasksHidden ? (
-          <p>📡 Communications coupées : votre liste de tâches est indisponible. Vous pouvez toujours accomplir une tâche si vous vous souvenez de son poste.</p>
-        ) : (
-          <ul class="list">
-            {tasks?.map((t) => (
-              <li key={t.taskId} class={t.done ? 'dead' : ''}>
-                <span style={{ fontSize: '1.3rem' }}>{t.done ? '✅' : '⬜'}</span>
-                <div class="grow">
-                  <strong>{t.name}</strong>{' '}
-                  <small>
-                    ({TASK_TYPE_LABEL[t.type]}
-                    {t.steps > 1 ? `, étape ${Math.min(t.step + 1, t.steps)}/${t.steps}` : ''})
-                  </small>
-                  {t.next && !t.done && (
-                    <div class="muted">
-                      📍 {t.next.roomName}
-                      {t.next.floor ? ` (${t.next.floor})` : ''} — {t.next.stationName}
+      {!v.me.tasksHidden && tasks.length > 0 && (
+        <div class="card">
+          <div class="row">
+            <h2 class="grow" style={{ margin: 0 }}>
+              Mes tâches
+            </h2>
+            <span class="badge">
+              {done.length}/{tasks.length} faites
+            </span>
+          </div>
+          {[...rooms.entries()].map(([room, list]) => (
+            <div key={room}>
+              <h3 class="room-title">📍 {room}</h3>
+              <ul class="list">
+                {list.map((t) => (
+                  <li key={t.taskId}>
+                    <span style={{ fontSize: '1.3rem' }}>⬜</span>
+                    <div class="grow">
+                      <strong>{t.name}</strong>{' '}
+                      <small>
+                        ({TASK_TYPE_LABEL[t.type]}
+                        {t.steps > 1 ? `, étape ${t.step + 1}/${t.steps}` : ''})
+                      </small>
+                      <div class="muted">{t.next?.stationName}</div>
                     </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p class="muted" style={{ fontSize: '0.9rem' }}>
-          Rendez-vous au poste en marchant, puis ouvrez l’onglet « Poste » et scannez son QR code.
-        </p>
-      </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {done.length > 0 && (
+            <ul class="list">
+              {done.map((t) => (
+                <li key={t.taskId} class="done">
+                  <span style={{ fontSize: '1.3rem' }}>✅</span>
+                  <span class="grow">{t.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <p class="muted center" style={{ fontSize: '0.9rem' }}>
+        Marchez jusqu’au poste, puis onglet « Poste » pour scanner son QR code. Ne regardez pas votre écran dans l’escalier.
+      </p>
     </>
   );
 }
@@ -452,6 +471,7 @@ interface ScanResult {
 
 function ScanTab({ v, conn, initial, onConsumed }: { v: PlayerView; conn: Conn; initial?: string; onConsumed: () => void }) {
   const [station, setStation] = useState<{ code: string; info: ScanResult }>();
+  const status = useStore(conn.store).status;
   const scan = async (raw: string) => {
     const r = await conn.act<ScanResult>({ type: 'scan', code: raw });
     if (!r.ok) {
@@ -463,17 +483,19 @@ function ScanTab({ v, conn, initial, onConsumed }: { v: PlayerView; conn: Conn; 
     return true;
   };
   useEffect(() => {
-    if (initial && conn.store.get().status === 'online') {
+    if (initial && status === 'online') {
       onConsumed();
       void scan(initial);
     }
-  }, [initial, conn.store.get().status]);
+  }, [initial, status]);
 
   if (station) return <StationPanel v={v} conn={conn} code={station.code} info={station.info} close={() => setStation(undefined)} rescan={() => scan(station.code)} />;
   return (
     <div class="card stack">
-      <h2>Utiliser un poste</h2>
-      <p class="muted">Tâches, bouton d’urgence, réparations et moniteur : tout se déclenche en scannant le poste sur place.</p>
+      <h2 style={{ margin: 0 }}>Utiliser un poste</h2>
+      <p class="muted" style={{ margin: 0 }}>
+        Tâches, bouton d’urgence, réparations, moniteur de vie : tout se fait en scannant la fiche du poste, sur place.
+      </p>
       <Scanner onCode={scan} />
     </div>
   );
@@ -481,7 +503,7 @@ function ScanTab({ v, conn, initial, onConsumed }: { v: PlayerView; conn: Conn; 
 
 function StationPanel({ v, conn, code, info, close, rescan }: { v: PlayerView; conn: Conn; code: string; info: ScanResult; close: () => void; rescan: () => void }) {
   // les informations du poste sont rafraîchies quand l'état de la partie change
-  const sabKey = `${v.sabotage?.kind}-${v.sabotage?.stations.map((s) => s.fixed).join()}-${v.me.tasks?.map((t) => t.step).join()}`;
+  const key = `${v.sabotage?.kind}-${v.sabotage?.stations.map((s) => s.fixed).join()}-${v.me.tasks?.map((t) => t.step).join()}-${v.me.alive}`;
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
@@ -489,42 +511,40 @@ function StationPanel({ v, conn, code, info, close, rescan }: { v: PlayerView; c
       return;
     }
     rescan();
-  }, [sabKey]);
+  }, [key]);
   return (
     <div class="card stack">
       <div class="row">
         <div class="grow">
+          <small class="muted">Poste scanné</small>
           <h2 style={{ margin: 0 }}>{info.name}</h2>
-          <small>{info.roomName}</small>
+          <small>📍 {info.roomName}</small>
         </div>
-        <button class="btn small" onClick={close}>
-          Fermer
-        </button>
       </div>
       {info.block && <p class="card warn">{info.block}</p>}
       {info.kind === 'task' &&
         (info.tasks && info.tasks.length > 0 ? (
-          info.tasks.map((t) => (
-            <ActButton
-              key={t.taskId}
-              class="block big primary"
-              disabled={!!info.block}
-              run={() => conn.act({ type: 'startTask', code, taskId: t.taskId })}
-            >
-              ▶ {t.name}
-              {t.steps > 1 ? ` (${t.step}/${t.steps})` : ''} — {GAMES[t.game as keyof typeof GAMES]?.label}
-            </ActButton>
-          ))
+          <>
+            <p style={{ margin: 0 }}>Choisissez la tâche à faire ici :</p>
+            {info.tasks.map((t) => (
+              <ActButton key={t.taskId} class="block big primary" disabled={!!info.block} run={() => conn.act({ type: 'startTask', code, taskId: t.taskId })}>
+                ▶ {t.name}
+                {t.steps > 1 ? ` (étape ${t.step}/${t.steps})` : ''}
+                <small style={{ display: 'block', fontWeight: 500 }}>{GAMES[t.game as keyof typeof GAMES]?.label}</small>
+              </ActButton>
+            ))}
+          </>
         ) : (
-          <p>Aucune de vos tâches ne se fait à ce poste pour l’instant.</p>
+          <p>Aucune de vos tâches ne se fait à ce poste pour l’instant. Vérifiez l’onglet Tâches.</p>
         ))}
       {info.kind === 'emergency' && (
         <>
-          <p>Réunions d’urgence restantes : {info.emergencyLeft ?? 0}</p>
+          <p style={{ margin: 0 }}>Réunions d’urgence restantes : {info.emergencyLeft ?? 0}</p>
           <ActButton
             class="block big danger"
             disabled={!!info.block}
             confirm="Convoquer une réunion d’urgence ? Tout le monde sera appelé en salle de réunion."
+            confirmOk="Convoquer"
             run={() => conn.act({ type: 'callEmergency', code })}
           >
             🚨 RÉUNION D’URGENCE
@@ -534,7 +554,7 @@ function StationPanel({ v, conn, code, info, close, rescan }: { v: PlayerView; c
       {info.kind === 'vitals' && info.vitals && (
         <ul class="list">
           {info.vitals.map((p) => (
-            <li key={p.id} class={p.status !== 'alive' ? 'dead' : ''}>
+            <li key={p.id} class={p.status !== 'alive' ? 'done' : ''}>
               <span class="num">{p.num}</span>
               <span class="grow">{p.name}</span>
               <span class={`badge ${p.status === 'alive' ? 'crew' : 'dead'}`}>{p.status === 'alive' ? 'vivant·e' : p.status === 'dead' ? 'mort·e' : 'parti·e'}</span>
@@ -548,45 +568,52 @@ function StationPanel({ v, conn, code, info, close, rescan }: { v: PlayerView; c
           🔧 Réparer
         </ActButton>
       )}
+      <button class="btn block" onClick={close}>
+        📷 Scanner un autre poste
+      </button>
     </div>
   );
 }
 
 function ReactorHold({ v, conn, code }: { v: PlayerView; conn: Conn; code: string }) {
   const [on, setOn] = useState(false);
+  const holding = useRef(false);
   const timer = useRef<number>();
-  const send = async (state: boolean) => {
-    const r = await conn.act<{ fixed?: boolean; holders?: number }>({ type: 'hold', code, on: state });
-    if (!r.ok && state) {
+  const stop = () => {
+    clearInterval(timer.current);
+    if (holding.current) void conn.act({ type: 'hold', code, on: false });
+    holding.current = false;
+    setOn(false);
+  };
+  const beat = async () => {
+    const r = await conn.act<{ fixed?: boolean }>({ type: 'hold', code, on: true });
+    if (!holding.current) return;
+    if (!r.ok) {
       toast(r.msg ?? 'Refusé', 'err');
       stop();
-    }
-    if (r.data?.fixed) {
+    } else if (r.data?.fixed) {
       toast('Réacteur stabilisé !', 'ok');
+      holding.current = false;
       stop();
     }
   };
   const start = () => {
-    if (on) return;
+    if (holding.current) return;
     unlockAudio();
+    holding.current = true;
     setOn(true);
-    void send(true);
-    timer.current = window.setInterval(() => void send(true), 1000);
-  };
-  const stop = () => {
-    clearInterval(timer.current);
-    if (on) void send(false);
-    setOn(false);
+    void beat();
+    timer.current = window.setInterval(() => void beat(), 1000);
   };
   useEffect(() => () => clearInterval(timer.current), []);
-  const active = v.sabotage?.kind === 'reactor';
-  if (!active) return <p>Le réacteur fonctionne normalement.</p>;
-  const held = v.sabotage!.stations.filter((s) => s.held).length;
+  if (v.sabotage?.kind !== 'reactor') return <p>Le réacteur fonctionne normalement.</p>;
+  const held = v.sabotage.stations.filter((s) => s.held).length;
   return (
     <div class="stack">
-      <p>
-        Maintenez le bouton appuyé. Une autre personne doit faire de même <strong>en même temps</strong> à l’autre poste Réacteur. Postes tenus : {held}/2
+      <p style={{ margin: 0 }}>
+        Maintenez le bouton appuyé. Une autre personne doit faire de même <strong>en même temps</strong> à l’autre poste Réacteur (criez-vous « prêt ? »).
       </p>
+      <div class="center big-num">Postes tenus : {held}/2</div>
       <button
         class={`hold ${on ? 'on' : ''}`}
         onPointerDown={(e) => {
@@ -604,49 +631,64 @@ function ReactorHold({ v, conn, code }: { v: PlayerView; conn: Conn; code: strin
 }
 
 // ------------------------------------------------------------------- Mini-jeu en cours
-function ChallengeScreen({ v, c, conn }: { v: PlayerView; c: ChallengeView; conn: Conn }) {
+export function ChallengeBody({ c, submit, serverNow }: { c: ChallengeView; submit: (answer: unknown) => Promise<boolean>; serverNow: () => number }) {
   const [attempt, setAttempt] = useState(0);
   const [sending, setSending] = useState(false);
+  return sending ? (
+    <div class="card center">
+      <span class="spinner" /> Validation par le serveur…
+    </div>
+  ) : (
+    <GameView
+      key={attempt}
+      c={c}
+      serverNow={serverNow}
+      done={async (answer) => {
+        setSending(true);
+        const wait = c.startedAt + c.minMs - serverNow();
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait + 150));
+        const ok = await submit(answer);
+        setSending(false);
+        if (!ok) setAttempt((a) => a + 1);
+      }}
+    />
+  );
+}
+
+function ChallengeScreen({ v, c, conn }: { v: PlayerView; c: ChallengeView; conn: Conn }) {
   const info = gameInfo(c.game);
-  const submit = async (answer: unknown) => {
-    setSending(true);
-    const wait = c.startedAt + c.minMs - conn.serverNow();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait + 150));
-    const r = await conn.act<{ taskDone?: boolean; fixed?: boolean; partial?: boolean; fake?: boolean; nextStep?: number }>({ type: 'submit', challengeId: c.id, answer });
-    setSending(false);
-    if (!r.ok) {
-      toast(r.msg ?? 'Refusé', 'err');
-      setAttempt(attempt + 1);
-      return;
-    }
-    const d = r.data ?? {};
-    if (d.taskDone) toast('Tâche terminée ✔', 'ok');
-    else if (d.nextStep) toast(`Étape validée. Rendez-vous au poste suivant (étape ${d.nextStep}).`, 'ok');
-    else if (d.fixed) toast('Sabotage réparé !', 'ok');
-    else if (d.partial) toast('Poste réparé : il faut aussi réparer l’autre poste !', 'ok');
-    else toast('Terminé.', 'ok');
-    buzz(60);
-  };
   return (
     <div class="overlay">
       <div class="wrap stack">
-        <div class="row">
-          <div class="grow">
-            <h2 style={{ margin: 0 }}>{c.purpose === 'fix' ? info?.label : c.taskName}</h2>
-            <small>
-              {c.stationName} — {info?.label}
-            </small>
-          </div>
+        <div>
+          <small class="muted">
+            {c.stationName} · {info?.label}
+          </small>
+          <h2 style={{ margin: 0 }}>{c.purpose === 'fix' ? info?.label : c.taskName}</h2>
         </div>
-        <p>{info?.hint}</p>
+        <p class="hint">{info?.hint}</p>
         {v.sabotage && v.sabotage.critical && c.purpose !== 'fix' && <p class="card danger">🚨 {v.sabotage.label} en cours !</p>}
-        {sending ? (
-          <p class="card center">Validation par le serveur…</p>
-        ) : (
-          <GameView key={attempt} c={c} done={submit} serverNow={() => conn.serverNow()} />
-        )}
+        <ChallengeBody
+          c={c}
+          serverNow={() => conn.serverNow()}
+          submit={async (answer) => {
+            const r = await conn.act<{ taskDone?: boolean; fixed?: boolean; partial?: boolean; fake?: boolean; nextStep?: number }>({ type: 'submit', challengeId: c.id, answer });
+            if (!r.ok) {
+              toast(r.msg ?? 'Refusé', 'err');
+              return false;
+            }
+            const d = r.data ?? {};
+            if (d.taskDone) toast('Tâche terminée !', 'ok');
+            else if (d.nextStep) toast(`Étape validée. Allez au poste suivant (étape ${d.nextStep}) : voir l’onglet Tâches.`, 'ok');
+            else if (d.fixed) toast('Sabotage réparé !', 'ok');
+            else if (d.partial) toast('Poste réparé : il faut aussi réparer l’autre poste !', 'ok');
+            else toast('Terminé.', 'ok');
+            buzz(60);
+            return true;
+          }}
+        />
         <ActButton class="block" run={() => conn.act({ type: 'cancelChallenge' })}>
-          Abandonner
+          Abandonner ce mini-jeu
         </ActButton>
       </div>
     </div>
@@ -661,14 +703,16 @@ function BodyScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
   return (
     <div class="wrap stack center">
       <div class="card danger">
-        <h1>💀 Vous avez été éliminé·e</h1>
-        {v.me.killedByName && <p class="muted">Gardez pour vous l’identité de la personne qui vous a éliminé·e.</p>}
+        <h1 style={{ marginTop: 0 }}>💀 Vous avez été éliminé·e</h1>
         <p>
           <strong>Asseyez-vous calmement sur place</strong> (jamais dans un escalier ni un passage : décalez-vous de quelques pas si besoin). Restez silencieux·se et immobile.
         </p>
+        <p class="muted" style={{ margin: 0 }}>
+          Ne révélez jamais qui vous a éliminé·e.
+        </p>
       </div>
       <div class="card">
-        <p>Code de votre corps — montrez-le à la personne qui vous découvre :</p>
+        <p style={{ margin: 0 }}>Code de votre corps — montrez-le à la personne qui vous découvre :</p>
         <div class="big-code">{b.code}</div>
       </div>
       {b.vanishAt && (
@@ -684,67 +728,90 @@ function BodyScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
 }
 
 // ------------------------------------------------------------------- Urgence
-function UrgentTab({ v, conn }: { v: PlayerView; conn: Conn }) {
-  const [alert, setAlert] = useState(false);
-  const now = conn.serverNow();
+function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () => void }) {
+  const [modal, setModal] = useState<'body' | 'killed' | 'alert' | 'meeting'>();
   useTick(1000);
+  const now = conn.serverNow();
   const meetingRoom = v.terrain.rooms.find((r) => r.id === v.terrain.meetingRoomId)?.name;
   return (
     <>
+      <h2 style={{ margin: '4px 0' }}>Que se passe-t-il ?</h2>
       {v.me.alive && (
-        <div class="card stack">
-          <h2>💀 Vous avez trouvé un corps ?</h2>
+        <>
+          <button class="btn big block danger action" onClick={() => setModal('body')}>
+            <span>💀</span> J’ai trouvé un corps
+          </button>
+          <button class="btn big block warn action" onClick={() => setModal('killed')}>
+            <span>🗡</span> On vient de m’éliminer
+          </button>
+          <button class="btn big block action" onClick={() => setModal('meeting')}>
+            <span>🚨</span> Je veux une réunion d’urgence
+          </button>
+        </>
+      )}
+      <button class="btn big block action" onClick={() => setModal('alert')}>
+        <span>⚠️</span> Alerte sécurité / je dois arrêter
+      </button>
+      {modal === 'body' && (
+        <Modal title="💀 Signaler un corps" onClose={() => setModal(undefined)}>
+          <p>Tapez le code affiché sur le téléphone de la personne assise au sol.</p>
           <CodeForm
-            label="Code affiché sur le téléphone du corps"
+            label="Code du corps (4 chiffres)"
             digits
             length={4}
+            autoFocus
             button="Signaler le corps"
             btnClass="danger"
             submit={async (code) => {
               const r = await conn.act({ type: 'report', code });
               if (!r.ok) toast(r.msg ?? 'Refusé', 'err');
+              else setModal(undefined);
               return r.ok;
             }}
           />
-        </div>
+        </Modal>
       )}
-      {v.me.alive && (
-        <div class="card stack">
-          <h2>🗡 Un imposteur vous a éliminé·e ?</h2>
-          <p class="muted">Il vous montre un code à 4 chiffres : saisissez-le immédiatement.</p>
+      {modal === 'killed' && (
+        <Modal title="🗡 Vous avez été éliminé·e" onClose={() => setModal(undefined)}>
+          <p>Un imposteur vous a touché l’épaule et vous montre un code : tapez-le tout de suite.</p>
           <CodeForm
-            label="Code montré par l’imposteur"
+            label="Code montré par l’imposteur (4 chiffres)"
             digits
             length={4}
+            autoFocus
             button="Je suis éliminé·e"
             btnClass="warn"
             submit={async (code) => {
               const r = await conn.act({ type: 'killed', code });
               if (!r.ok) toast(r.msg ?? 'Refusé', 'err');
+              else setModal(undefined);
               return r.ok;
             }}
           />
-        </div>
+        </Modal>
       )}
-      <div class="card">
-        <h3>Réunion d’urgence</h3>
-        <p>
-          Allez au bouton d’urgence ({meetingRoom}) et scannez-le dans l’onglet « Poste ». Il vous reste {v.me.emergencyLeft} réunion(s).
+      {modal === 'meeting' && (
+        <Modal title="🚨 Réunion d’urgence" onClose={() => setModal(undefined)}>
+          <p>
+            Allez au <strong>bouton d’urgence</strong> ({meetingRoom}) et scannez-le. Il vous reste <strong>{v.me.emergencyLeft}</strong> réunion(s).
+          </p>
           {now < v.emergencyCooldownUntil && (
-            <>
-              {' '}
-              Disponible dans <Countdown until={v.emergencyCooldownUntil} now={now} />.
-            </>
+            <p class="card warn">
+              Bouton disponible dans <Countdown until={v.emergencyCooldownUntil} now={now} />.
+            </p>
           )}
-        </p>
-      </div>
-      <button class="btn block big warn" onClick={() => setAlert(true)}>
-        ⚠️ Alerte sécurité / je dois arrêter
-      </button>
-      {alert && <AlertModal conn={conn} close={() => setAlert(false)} />}
+          {v.sabotage && <p class="card warn">Impossible pendant un sabotage : réparez-le d’abord.</p>}
+          <button class="btn big block primary" onClick={() => (setModal(undefined), goScan())}>
+            📷 Je suis au bouton : scanner
+          </button>
+        </Modal>
+      )}
+      {modal === 'alert' && <AlertModal conn={conn} close={() => setModal(undefined)} />}
+      <div class="spacer" />
       <ActButton
-        class="block"
+        class="block small"
         confirm="Quitter définitivement la partie ? Vous serez compté·e comme parti·e (vos tâches sont retirées)."
+        confirmOk="Quitter la partie"
         run={async () => {
           const r = await conn.act({ type: 'leave' });
           if (r.ok) {
@@ -763,21 +830,25 @@ function UrgentTab({ v, conn }: { v: PlayerView; conn: Conn }) {
 function AlertModal({ conn, close }: { conn: Conn; close: () => void }) {
   const [msg, setMsg] = useState('');
   return (
-    <Modal title="Alerte sécurité" onClose={close}>
-      <p>Le maître du jeu reçoit immédiatement votre alerte. Pour une urgence vitale, appelez le 112.</p>
-      <div class="row">
+    <Modal title="⚠️ Alerte sécurité" onClose={close}>
+      <p>Le maître du jeu reçoit immédiatement votre alerte (sonnerie). Urgence vitale : appelez le 112.</p>
+      <div class="grid-buttons">
         {['Je me suis blessé·e', 'Je ne me sens pas bien', 'Je veux arrêter', 'Problème de sécurité'].map((m) => (
-          <button class={`btn small ${msg === m ? 'primary' : ''}`} onClick={() => setMsg(m)}>
+          <button key={m} class={`btn ${msg === m ? 'primary' : ''}`} onClick={() => setMsg(m)}>
             {m}
           </button>
         ))}
       </div>
       <textarea rows={2} placeholder="Précisions (facultatif)" value={msg} onInput={(e) => setMsg((e.target as HTMLTextAreaElement).value)} />
-      <ActButton class="block big danger" okMsg="Alerte envoyée au maître du jeu." run={async () => {
-        const r = await conn.act({ type: 'alert', message: msg || 'Alerte sécurité' });
-        if (r.ok) close();
-        return r;
-      }}>
+      <ActButton
+        class="block big danger"
+        okMsg="Alerte envoyée au maître du jeu."
+        run={async () => {
+          const r = await conn.act({ type: 'alert', message: msg || 'Alerte sécurité' });
+          if (r.ok) close();
+          return r;
+        }}
+      >
         Envoyer l’alerte
       </ActButton>
     </Modal>
@@ -791,18 +862,18 @@ function RoleTab({ v, conn }: { v: PlayerView; conn: Conn }) {
   const imp = v.me.role === 'impostor';
   return (
     <>
-      <Reveal label="Mon rôle et mes actions secrètes">
-        <div class="stack">
-          <RoleCard v={v} />
-          {imp && <ImpostorActions v={v} conn={conn} now={now} />}
-          {!imp && !v.me.alive && <p class="card ghost">Fantôme d’équipage : terminez vos tâches. Vous ne pouvez plus voter, signaler ni réparer.</p>}
-        </div>
+      <Reveal label={imp ? 'Mon rôle et mes actions secrètes' : 'Mon rôle'}>
+        <RoleCard v={v} />
+        {imp && <ImpostorActions v={v} conn={conn} now={now} />}
+        {!imp && !v.me.alive && <p class="card ghost">Fantôme d’équipage : terminez vos tâches. Vous ne pouvez plus voter, signaler ni réparer.</p>}
       </Reveal>
       <FacadeButton v={v} />
       <a class="btn block" href="#/regles">
         📖 Règles du jeu
       </a>
-      <WakeLockToggle />
+      <Collapse title="🔔 Alertes de ce téléphone">
+        <AlertSetup conn={conn} pushKey={v.pushKey} pushOnServer={v.pushOn} compact />
+      </Collapse>
       <SafetyCard v={v} />
     </>
   );
@@ -820,9 +891,8 @@ function FacadeButton({ v }: { v: PlayerView }) {
       {on && (
         <div class="overlay" onClick={() => setOn(false)}>
           <div class="wrap stack">
-            <div class="stack">
-              <RoleCard v={{ ...v, me: { ...v.me, role: 'crewmate' } }} />
-            </div>
+            <RoleCard v={{ ...v, me: { ...v.me, role: 'crewmate' } }} />
+            <p class="muted center">Touchez pour fermer</p>
           </div>
         </div>
       )}
@@ -831,20 +901,20 @@ function FacadeButton({ v }: { v: PlayerView }) {
 }
 
 function ImpostorActions({ v, conn, now }: { v: PlayerView; conn: Conn; now: number }) {
-  const [doorRoom, setDoorRoom] = useState('');
   const cd = v.me.killCooldownUntil ?? 0;
   const sabCd = v.sabotageCooldownUntil ?? 0;
-  const doorsRooms = v.terrain.rooms.filter((r) => !r.forbidden && !r.transit && r.id !== v.terrain.meetingRoomId);
   return (
     <>
       {v.me.alive && (
         <div class="card danger stack">
-          <h3>🗡 Élimination</h3>
-          <p class="muted">Touchez l’épaule de la victime (avec son accord pour le jeu), montrez-lui le code : elle le saisit sur son téléphone. Interdit dans les escaliers et passages.</p>
+          <h3 style={{ margin: 0 }}>🗡 Élimination</h3>
+          <p class="muted" style={{ margin: 0 }}>
+            Touchez légèrement l’épaule de la victime et montrez-lui le code : elle le tape sur son téléphone. Jamais dans un escalier ou un passage.
+          </p>
           {now < cd ? (
-            <p>
-              Prochaine élimination possible dans <Countdown until={cd} now={now} />
-            </p>
+            <div class="center">
+              Prochaine élimination possible dans <span class="big-num">{fmtSec(cd - now)}</span>
+            </div>
           ) : (
             <ActButton class="block big danger" run={() => conn.act({ type: 'arm' })}>
               Préparer un code d’élimination
@@ -853,41 +923,33 @@ function ImpostorActions({ v, conn, now }: { v: PlayerView; conn: Conn; now: num
         </div>
       )}
       <div class="card stack">
-        <h3>🔧 Sabotages</h3>
+        <h3 style={{ margin: 0 }}>🔧 Sabotages</h3>
         {v.sabotage ? (
           <p>Sabotage en cours : {v.sabotage.label}.</p>
         ) : now < sabCd ? (
-          <p>
-            Sabotage disponible dans <Countdown until={sabCd} now={now} />
-          </p>
+          <div class="center">
+            Sabotage disponible dans <span class="big-num">{fmtSec(sabCd - now)}</span>
+          </div>
         ) : (
-          <>
-            {v.sabotageOptions?.filter((k) => k !== 'doors').map((k) => (
-              <ActButton key={k} class={`block ${SABOTAGE_INFO[k].critical ? 'danger' : 'warn'}`} confirm={`Déclencher « ${SABOTAGE_INFO[k].label} » ?`} run={() => conn.act({ type: 'sabotage', kind: k })} okMsg="Sabotage déclenché.">
-                {SABOTAGE_INFO[k].label}
-                {SABOTAGE_INFO[k].critical ? ' (critique)' : ''}
-              </ActButton>
-            ))}
-            {v.sabotageOptions?.includes('doors') && (
-              <div class="row">
-                <select class="grow" value={doorRoom} onChange={(e) => setDoorRoom((e.target as HTMLSelectElement).value)} style={{ flex: 1 }}>
-                  <option value="">Condamner une salle…</option>
-                  {doorsRooms.map((r) => (
-                    <option value={r.id}>{r.name}</option>
-                  ))}
-                </select>
-                <ActButton class="warn" disabled={!doorRoom} run={() => conn.act({ type: 'sabotage', kind: 'doors', roomId: doorRoom })} okMsg="Salle condamnée.">
-                  OK
-                </ActButton>
-              </div>
-            )}
-          </>
+          v.sabotageOptions?.map((k) => (
+            <ActButton
+              key={k}
+              class={`block ${SABOTAGE_INFO[k].critical ? 'danger' : 'warn'}`}
+              confirm={`Déclencher « ${SABOTAGE_INFO[k].label} » ?\n${SABOTAGE_INFO[k].short}`}
+              confirmOk="Saboter"
+              run={() => conn.act({ type: 'sabotage', kind: k })}
+              okMsg="Sabotage déclenché."
+            >
+              {SABOTAGE_INFO[k].label}
+              {SABOTAGE_INFO[k].critical ? ' (critique)' : ''}
+            </ActButton>
+          ))
         )}
         <small>Délai partagé entre tous les imposteurs. Les fantômes imposteurs peuvent aussi saboter.</small>
       </div>
       {v.terrain.passages && v.terrain.passages.length > 0 && v.me.alive && (
         <div class="card">
-          <h3>🕳 Conduits (réservés aux imposteurs)</h3>
+          <h3 style={{ marginTop: 0 }}>🕳 Conduits (réservés aux imposteurs)</h3>
           <ul class="list">
             {v.terrain.passages.map((p) => (
               <li key={p.id}>
@@ -898,7 +960,7 @@ function ImpostorActions({ v, conn, now }: { v: PlayerView; conn: Conn; now: num
               </li>
             ))}
           </ul>
-          <small>En marchant, sans vous cacher dans un endroit dangereux. Être vu sortir d’un conduit est une preuve !</small>
+          <small>En marchant. Être vu sortir d’un conduit est une preuve !</small>
         </div>
       )}
     </>
@@ -911,8 +973,10 @@ function ArmedCode({ v, conn }: { v: PlayerView; conn: Conn }) {
   if (!k || v.phase !== 'playing') return null;
   const now = conn.serverNow();
   return (
-    <Modal title="Code d’élimination">
-      <p>Montrez ce code à votre victime. Il expire dans <Countdown until={k.expiresAt} now={now} />.</p>
+    <Modal title="🗡 Code d’élimination">
+      <p style={{ margin: 0 }}>
+        Montrez ce code à votre victime. Il expire dans <Countdown until={k.expiresAt} now={now} />.
+      </p>
       <div class="big-code" style={{ color: 'var(--imp)' }}>
         {k.code}
       </div>
@@ -924,46 +988,66 @@ function ArmedCode({ v, conn }: { v: PlayerView; conn: Conn }) {
 }
 
 // ------------------------------------------------------------------- Réunion
+const STAGES = [
+  ['gather', 'Rassemblement'],
+  ['discussion', 'Discussion'],
+  ['voting', 'Vote'],
+  ['result', 'Résultat'],
+] as const;
+
 function MeetingScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
   useTick(500);
   const now = conn.serverNow();
   const m = v.meeting!;
   const [choice, setChoice] = useState<string>();
+  useEffect(() => setChoice(undefined), [m.stage]);
   const room = v.terrain.rooms.find((r) => r.id === v.terrain.meetingRoomId)?.name;
-  const alivePlayers = v.players.filter((p) => p.status === 'alive');
-  const stageLabel = { gather: 'Rassemblement', discussion: 'Discussion', voting: 'Vote', result: 'Résultat' }[m.stage];
+  const alive = v.players.filter((p) => p.status === 'alive');
+  const dead = v.players.filter((p) => p.status === 'dead');
+  const name = (id?: string) => (id === 'skip' ? 'Passer' : v.players.find((p) => p.id === id)?.name);
+  const left = m.stageEndsAt - now;
   return (
-    <div class="wrap stack">
-      <div class="card danger center">
-        <h1>{m.kind === 'report' ? '💀 Corps signalé !' : m.kind === 'emergency' ? '🚨 Réunion d’urgence' : '📣 Réunion'}</h1>
-        <p>
-          {m.kind === 'report' && `${m.calledByName} a trouvé le corps de ${m.bodyOfName}.`}
-          {m.kind === 'emergency' && `${m.calledByName} a convoqué une réunion.`}
-          {m.kind === 'gm' && (m.bodyOfName ? `Le maître du jeu signale le corps de ${m.bodyOfName}.` : 'Convoquée par le maître du jeu.')}
-        </p>
-        {m.endedSabotage && <p>Le sabotage « {m.endedSabotage} » est interrompu.</p>}
-      </div>
-      <div class="card center">
-        <div class="muted">{stageLabel}</div>
-        <div style={{ fontSize: '2.4rem' }}>
-          <Countdown until={m.stageEndsAt} now={now} />
+    <div class="wrap stack" style={{ paddingBottom: choice ? '160px' : undefined }}>
+      <div class="meeting-head">
+        <div class="row">
+          <span style={{ fontSize: '1.8rem' }}>{m.kind === 'report' ? '💀' : m.kind === 'emergency' ? '🚨' : '📣'}</span>
+          <div class="grow">
+            <strong>{m.kind === 'report' ? 'Corps signalé' : m.kind === 'emergency' ? 'Réunion d’urgence' : 'Réunion'}</strong>
+            <div class="muted" style={{ fontSize: '0.9rem' }}>
+              {m.kind === 'report' && `${m.calledByName} a trouvé le corps de ${m.bodyOfName}`}
+              {m.kind === 'emergency' && `convoquée par ${m.calledByName}`}
+              {m.kind === 'gm' && (m.bodyOfName ? `corps de ${m.bodyOfName} (signalé par le MJ)` : 'convoquée par le maître du jeu')}
+            </div>
+          </div>
+          <span class={`big-num ${left < 10_000 ? 'hot' : ''}`}>{fmtSec(left)}</span>
+        </div>
+        <div class="stepper">
+          {STAGES.map(([k, l]) => (
+            <span key={k} class={k === m.stage ? 'on' : STAGES.findIndex((x) => x[0] === k) < STAGES.findIndex((x) => x[0] === m.stage) ? 'past' : ''}>
+              {l}
+            </span>
+          ))}
         </div>
       </div>
+      {m.endedSabotage && <p class="card">Le sabotage « {m.endedSabotage} » est interrompu.</p>}
       {m.newlyDead.length > 0 && (
-        <div class="card">
-          <strong>Morts depuis la dernière réunion :</strong> {m.newlyDead.map((d) => d.name).join(', ')}
+        <div class="card danger">
+          <strong>💀 Morts depuis la dernière réunion :</strong> {m.newlyDead.map((d) => d.name).join(', ')}
         </div>
       )}
-      {!v.me.alive && <div class="card ghost">👻 Vous êtes un fantôme : assistez en silence, sans aucun signe. Vous ne votez pas.</div>}
+      {!v.me.alive && <div class="card ghost">👻 Fantôme : assistez en silence, sans aucun signe. Vous ne votez pas.</div>}
 
       {m.stage === 'gather' && (
-        <div class="card stack">
-          <p>
-            Rejoignez <strong>{room}</strong> en marchant. Arrivé·es : {m.checkedInCount}/{m.aliveCount}
+        <div class="card stack center">
+          <p style={{ margin: 0 }}>
+            Rejoignez la salle de réunion : <strong>{room}</strong>, en marchant.
           </p>
+          <div class="big-num">
+            {m.checkedInCount}/{m.aliveCount} arrivé·es
+          </div>
           {v.me.alive &&
             (v.me.checkedIn ? (
-              <p class="card ok">Vous êtes signalé·e présent·e.</p>
+              <p class="card ok">✅ Vous êtes signalé·e présent·e. La discussion commence quand tout le monde est là.</p>
             ) : (
               <ActButton class="block big primary" run={() => conn.act({ type: 'checkIn' })}>
                 Je suis arrivé·e
@@ -972,61 +1056,94 @@ function MeetingScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
         </div>
       )}
 
-      {m.stage === 'discussion' && <p class="card">Discutez : qui était où ? Qu’avez-vous vu ? Le vote s’ouvre à la fin du compte à rebours.</p>}
+      {m.stage === 'discussion' && (
+        <div class="card stack">
+          <p style={{ margin: 0 }}>
+            <strong>Discutez !</strong> Qui était où ? Qu’avez-vous vu ? Le vote s’ouvre à la fin du compte à rebours.
+          </p>
+          <PlayerChips alive={alive} dead={dead} meId={v.me.id} />
+        </div>
+      )}
 
       {m.stage === 'voting' && (
         <div class="card stack">
-          <h2>Votez</h2>
           {m.myVote ? (
-            <p class="card ok">Vote enregistré ({m.myVote === 'skip' ? 'passer' : v.players.find((p) => p.id === m.myVote)?.name}). Il ne peut plus être modifié.</p>
+            <p class="card ok" style={{ margin: 0 }}>
+              ✅ Vote enregistré : <strong>{name(m.myVote)}</strong>. Il ne peut plus être modifié.
+            </p>
           ) : v.me.alive ? (
-            <p class="muted">Touchez un joueur pour voter contre lui, ou « Passer ». Sans vote, vous vous abstenez.</p>
+            <p style={{ margin: 0 }}>
+              <strong>Votez :</strong> touchez un joueur, ou « Passer ». Sans vote, vous vous abstenez.
+            </p>
           ) : null}
-          <ul class="list">
-            {v.players
-              .filter((p) => p.status !== 'left')
-              .map((p) => (
-                <li key={p.id} class={p.status === 'dead' ? 'dead' : ''}>
-                  <span class="num">{p.num}</span>
-                  <span class="grow">
-                    {p.name}
-                    {p.id === v.me.id ? ' (vous)' : ''}
-                  </span>
-                  {m.votedIds.includes(p.id) && <span class="badge">a voté</span>}
-                  {p.status === 'alive' && v.me.alive && !m.myVote && (
-                    <button class="btn small danger" onClick={() => setChoice(p.id)}>
-                      Voter
-                    </button>
-                  )}
-                </li>
-              ))}
-          </ul>
+          <div class="vote-grid">
+            {alive.map((p) => (
+              <button
+                key={p.id}
+                class={`vote ${choice === p.id ? 'sel' : ''} ${m.myVote === p.id ? 'mine' : ''}`}
+                disabled={!v.me.alive || !!m.myVote}
+                onClick={() => setChoice(p.id)}
+              >
+                <span class="num">{p.num}</span>
+                <span class="grow">
+                  {p.name}
+                  {p.id === v.me.id ? ' (vous)' : ''}
+                </span>
+                {m.votedIds.includes(p.id) && <span title="a voté">🗳</span>}
+              </button>
+            ))}
+          </div>
           {v.me.alive && !m.myVote && (
-            <button class="btn block" onClick={() => setChoice('skip')}>
-              Passer (ne pas éjecter)
+            <button class={`btn block ${choice === 'skip' ? 'primary' : ''}`} onClick={() => setChoice('skip')}>
+              ⏭ Passer (ne pas éjecter)
             </button>
           )}
-          <small>
-            {m.votedIds.length}/{alivePlayers.length} votes
+          <small class="center">
+            {m.votedIds.length}/{alive.length} votes · 🗳 = a déjà voté
           </small>
+          {dead.length > 0 && <small class="muted">Morts : {dead.map((p) => p.name).join(', ')}</small>}
         </div>
       )}
-      {choice && (
-        <Modal title="Confirmer le vote" onClose={() => setChoice(undefined)}>
-          <p>
-            {choice === 'skip' ? 'Voter pour passer (personne n’est éjecté) ?' : `Voter contre ${v.players.find((p) => p.id === choice)?.name} ?`} Le vote est définitif.
-          </p>
-          <ActButton class="block big danger" run={async () => {
-            const r = await conn.act({ type: 'vote', target: choice });
-            setChoice(undefined);
-            return r;
-          }}>
-            Confirmer
-          </ActButton>
-        </Modal>
+      {choice && m.stage === 'voting' && !m.myVote && (
+        <div class="confirm-bar">
+          <div>{choice === 'skip' ? 'Passer : personne n’est éjecté ?' : `Voter contre ${name(choice)} ?`}</div>
+          <div class="row">
+            <button class="btn grow" onClick={() => setChoice(undefined)}>
+              Changer
+            </button>
+            <ActButton
+              class="grow danger"
+              run={async () => {
+                const r = await conn.act({ type: 'vote', target: choice });
+                setChoice(undefined);
+                return r;
+              }}
+            >
+              Confirmer mon vote
+            </ActButton>
+          </div>
+        </div>
       )}
 
       {m.stage === 'result' && m.result && <VoteResultCard v={v} />}
+    </div>
+  );
+}
+
+function PlayerChips({ alive, dead, meId }: { alive: PlayerView['players']; dead: PlayerView['players']; meId: string }) {
+  return (
+    <div class="chips">
+      {alive.map((p) => (
+        <span key={p.id} class="chip">
+          #{p.num} {p.name}
+          {p.id === meId ? ' (vous)' : ''}
+        </span>
+      ))}
+      {dead.map((p) => (
+        <span key={p.id} class="chip dead">
+          💀 {p.name}
+        </span>
+      ))}
     </div>
   );
 }
@@ -1040,9 +1157,9 @@ function VoteResultCard({ v }: { v: PlayerView }) {
     else headline = `${r.ejectedName} ${r.wasImpostor ? 'était un imposteur' : 'n’était pas un imposteur'}.`;
   } else headline = r.tie ? 'Personne n’a été éjecté (égalité).' : 'Personne n’a été éjecté (vote passé).';
   return (
-    <div class="card stack center">
-      <h2>{headline}</h2>
-      {r.impostorsLeft !== undefined && <p>{r.impostorsLeft} imposteur(s) restant(s).</p>}
+    <div class={`card stack center ${r.ejectedId ? (r.wasImpostor ? 'ok' : r.wasImpostor === false ? 'danger' : '') : ''}`}>
+      <h2 style={{ margin: 0 }}>{headline}</h2>
+      {r.impostorsLeft !== undefined && <p class="big-num">{r.impostorsLeft} imposteur(s) restant(s)</p>}
       <table>
         <tbody>
           {Object.entries(r.tally)
@@ -1064,8 +1181,7 @@ function VoteResultCard({ v }: { v: PlayerView }) {
         </tbody>
       </table>
       {r.votes && (
-        <details>
-          <summary>Détail des votes</summary>
+        <Collapse title="Détail des votes">
           <ul class="list">
             {Object.entries(r.votes).map(([voter, t]) => (
               <li key={voter}>
@@ -1073,9 +1189,11 @@ function VoteResultCard({ v }: { v: PlayerView }) {
               </li>
             ))}
           </ul>
-        </details>
+        </Collapse>
       )}
-      <p class="muted">Reprise de la partie dans quelques secondes…</p>
+      <p class="muted" style={{ margin: 0 }}>
+        La partie reprend dans quelques secondes…
+      </p>
     </div>
   );
 }
@@ -1085,44 +1203,32 @@ export function EndRecap({ end }: { end: NonNullable<PlayerView['end']> }) {
   return (
     <>
       <div class={`card center ${end.winner === 'crew' ? 'ok' : end.winner === 'impostors' ? 'danger' : ''}`}>
-        <h1>{end.winner === 'crew' ? 'Victoire de l’équipage' : end.winner === 'impostors' ? 'Victoire des imposteurs' : 'Partie arrêtée'}</h1>
+        <h1 style={{ margin: 0 }}>{end.winner === 'crew' ? 'Victoire de l’équipage' : end.winner === 'impostors' ? 'Victoire des imposteurs' : 'Partie arrêtée'}</h1>
         <p>{end.reason}</p>
-        <p class="muted">
+        <p class="muted" style={{ margin: 0 }}>
           Durée : {fmtSec(end.durationSec * 1000)} — tâches : {Math.round(end.taskBar * 100)} %
         </p>
       </div>
       <div class="card">
-        <h3>Rôles</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Joueur</th>
-              <th>Rôle</th>
-              <th>Statut</th>
-              <th>Tâches</th>
-            </tr>
-          </thead>
-          <tbody>
-            {end.players.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  #{p.num} {p.name}
-                </td>
-                <td>
-                  <span class={`badge ${p.role === 'impostor' ? 'imp' : 'crew'}`}>{roleLabel(p.role)}</span>
-                </td>
-                <td>
-                  {p.status === 'alive' ? 'vivant·e' : p.deathCause === 'ejected' ? 'éjecté·e' : p.deathCause === 'left' ? 'parti·e' : p.killedByName ? `tué·e par ${p.killedByName}` : 'mort·e'}
-                </td>
-                <td>{p.role === 'impostor' ? `${p.kills} élim.` : `${p.tasksDone}/${p.tasksTotal}`}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h3 style={{ marginTop: 0 }}>Rôles</h3>
+        <ul class="list">
+          {end.players.map((p) => (
+            <li key={p.id}>
+              <span class="num">{p.num}</span>
+              <div class="grow">
+                <strong>{p.name}</strong>{' '}
+                <span class={`badge ${p.role === 'impostor' ? 'imp' : 'crew'}`}>{roleLabel(p.role)}</span>
+                <div class="muted" style={{ fontSize: '0.88rem' }}>
+                  {p.status === 'alive' ? 'vivant·e' : p.deathCause === 'ejected' ? 'éjecté·e' : p.deathCause === 'left' ? 'parti·e' : p.killedByName ? `tué·e par ${p.killedByName}` : 'mort·e'} ·{' '}
+                  {p.role === 'impostor' ? `${p.kills} élimination(s)` : `${p.tasksDone}/${p.tasksTotal} tâches`}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
       {end.kills.length > 0 && (
-        <div class="card">
-          <h3>Éliminations</h3>
+        <Collapse title="🗡 Éliminations" count={end.kills.length}>
           <ul class="list">
             {end.kills.map((k, i) => (
               <li key={i}>
@@ -1130,11 +1236,10 @@ export function EndRecap({ end }: { end: NonNullable<PlayerView['end']> }) {
               </li>
             ))}
           </ul>
-        </div>
+        </Collapse>
       )}
       {end.meetings.length > 0 && (
-        <div class="card">
-          <h3>Réunions</h3>
+        <Collapse title="📣 Réunions et votes" count={end.meetings.length}>
           <ul class="list">
             {end.meetings.map((m) => (
               <li key={m.id}>
@@ -1142,7 +1247,8 @@ export function EndRecap({ end }: { end: NonNullable<PlayerView['end']> }) {
                   <strong>n°{m.id}</strong> {m.kind === 'report' ? `corps de ${m.bodyOfName} signalé par ${m.calledByName}` : m.kind === 'emergency' ? `urgence (${m.calledByName})` : 'convoquée par le MJ'}
                   {m.newlyDead.length > 0 && <div class="muted">Morts annoncés : {m.newlyDead.join(', ')}</div>}
                   <div>
-                    {m.ejectedName ? `Éjecté·e : ${m.ejectedName} (${m.wasImpostor ? 'imposteur' : 'innocent·e'})` : m.tie ? 'Égalité' : 'Personne éjecté'} — {m.tally.map((t) => `${t.name} ${t.votes}`).join(', ')}
+                    {m.ejectedName ? `Éjecté·e : ${m.ejectedName} (${m.wasImpostor ? 'imposteur' : 'innocent·e'})` : m.tie ? 'Égalité' : 'Personne éjecté'} —{' '}
+                    {m.tally.map((t) => `${t.name} ${t.votes}`).join(', ')}
                     {m.skips ? `, passer ${m.skips}` : ''}
                   </div>
                   {m.votes && <div class="muted">{m.votes.map((x) => `${x.voter}→${x.target}`).join(' · ')}</div>}
@@ -1150,33 +1256,38 @@ export function EndRecap({ end }: { end: NonNullable<PlayerView['end']> }) {
               </li>
             ))}
           </ul>
-        </div>
+        </Collapse>
       )}
       {end.sabotages.length > 0 && (
-        <div class="card">
-          <h3>Sabotages</h3>
+        <Collapse title="🔧 Sabotages" count={end.sabotages.length}>
           <ul class="list">
             {end.sabotages.map((s, i) => (
               <li key={i}>
-                {s.label}
-                {s.roomName ? ` (${s.roomName})` : ''} par {s.byName} — {s.outcome}
+                {s.label} par {s.byName} — {s.outcome}
               </li>
             ))}
           </ul>
-        </div>
+        </Collapse>
       )}
     </>
   );
 }
 
-function EndScreen({ v }: { v: PlayerView; conn: Conn }) {
+function EndScreen({ v }: { v: PlayerView }) {
+  const end = v.end;
+  const mine = end?.players.find((p) => p.id === v.me.id);
+  const won = end && mine && ((end.winner === 'crew' && mine.role === 'crewmate') || (end.winner === 'impostors' && mine.role === 'impostor'));
   return (
     <div class="wrap stack">
-      {v.end && <EndRecap end={v.end} />}
+      {end && mine && end.winner !== 'none' && (
+        <div class={`role-card ${won ? 'crew' : 'imp'}`}>
+          <div style={{ fontSize: '3rem' }}>{won ? '🎉' : '😵'}</div>
+          <h1>{won ? 'Vous avez gagné !' : 'Vous avez perdu…'}</h1>
+          <p style={{ margin: 0 }}>Vous étiez {mine.role === 'impostor' ? 'imposteur' : 'membre d’équipage'}.</p>
+        </div>
+      )}
+      {end && <EndRecap end={end} />}
       <p class="card center">Restez connecté·e : si le maître du jeu relance une partie, vous serez automatiquement dans le nouveau salon.</p>
-      <button class="btn block" onClick={() => go('/')}>
-        Accueil
-      </button>
     </div>
   );
 }

@@ -75,8 +75,8 @@ Pour chaque mécanique : fonctionnement officiel → déclenchement → restrict
 | Oxygène / Crash (critique) | compte à rebours 30–45 s | code saisi sur **2 claviers** distincts | 2 postes « Oxygène » ; à chacun, un code PIN affiché à recopier. Défaut : 90 s. |
 | Lumières | vision de l’équipage très réduite | interrupteurs sur un tableau | **Panne de courant** : les postes de tâches sont hors service pour tous les vivants (aucune vraie lumière coupée). Réparation au poste « Énergie (fictif) » : 5 interrupteurs virtuels. |
 | Communications | liste des tâches, barre, caméras, admin, vitales indisponibles | régler une fréquence / 2 claviers | Liste des tâches et barre masquées, moniteur de vie indisponible. Réparation au poste « Radio » : aligner deux ondes. |
-| Portes | salle fermée ~10 s | se rouvrent seules (ou manuellement selon la carte) | **Salle condamnée** 20 s : personne n’y entre, les portes restent physiquement ouvertes, on peut toujours en sortir. Postes de la salle indisponibles. |
-- Règles communes (🟡) : un seul sabotage à la fois ; délai partagé 30 s (10 s au début) qui démarre à la réparation (au déclenchement pour les portes) ; les imposteurs fantômes peuvent saboter ; **les fantômes ne réparent pas** ; le bouton d’urgence est bloqué pendant un sabotage (sauf portes) ; **signaler un corps interrompt un sabotage critique** (les lumières/communications persistent).
+| Portes | salle fermée ~10 s | se rouvrent seules (ou manuellement selon la carte) | **Non reproduit** (retiré après essai) : une porte réelle ne se ferme ni ne se rouvre toute seule, et on ne verrouille jamais une porte. Une simple « interdiction d’entrer » n’était ni vérifiable ni perceptible (personne ne sait quand la salle « se rouvre »). Voir `limites-mecaniques.md`. |
+- Règles communes (🟡) : un seul sabotage à la fois ; délai partagé 30 s (10 s au début) qui démarre à la réparation ; les imposteurs fantômes peuvent saboter ; **les fantômes ne réparent pas** ; le bouton d’urgence est bloqué pendant un sabotage (sauf portes, absentes ici) ; **signaler un corps interrompt un sabotage critique** (les lumières/communications persistent).
 - **Différence** : jamais de vraie coupure, de porte fermée à clé ou d’obscurité.
 
 ### 8. Réparations à plusieurs endroits — 🟡
@@ -89,7 +89,7 @@ Pour chaque mécanique : fonctionnement officiel → déclenchement → restrict
 - **Technique** : code de corps unique ; refusé s’il est déjà signalé ou disparu ; les corps non signalés disparaissent à la réunion. Option : un corps non trouvé « disparaît » après 3 min (réglable, 0 = jusqu’à la réunion) pour que la victime ne reste pas assise indéfiniment.
 
 ### 10. Réunions d’urgence — 🟡
-- **Officiel** : bouton dans la salle de réunion ; N réunions par joueur (1 par défaut) ; délai 15 s après chaque réunion ; interdit pendant un sabotage (sauf portes) ; un fantôme ne peut pas.
+- **Officiel** : bouton dans la salle de réunion ; N réunions par joueur (1 par défaut) ; délai 15 s après chaque réunion ; interdit pendant un sabotage (sauf portes) ; un fantôme ne peut pas. Ici, sans sabotage de portes, le bouton est bloqué pendant **tout** sabotage.
 - **Technique** : poste « Bouton d’urgence » à scanner sur place ; compteur par joueur ; délai ; blocages identiques.
 
 ### 11. Chronologie de la réunion — 🟡

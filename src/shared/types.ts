@@ -1,4 +1,6 @@
 // Types partagés entre le serveur (Durable Object) et le client.
+import type { PushSubscriptionData, VapidKeys } from './webpush';
+
 // Le serveur est la seule source de vérité : le client ne reçoit que des « vues »
 // filtrées selon ce que le joueur a le droit de savoir.
 
@@ -26,7 +28,7 @@ export type GameKind =
 export type FixKind = 'switches' | 'tune' | 'pin';
 
 export type StationKind = 'task' | 'emergency' | 'reactor' | 'oxygen' | 'lights' | 'comms' | 'vitals';
-export type SabotageKind = 'reactor' | 'oxygen' | 'lights' | 'comms' | 'doors';
+export type SabotageKind = 'reactor' | 'oxygen' | 'lights' | 'comms';
 
 export interface Room {
   id: string;
@@ -108,7 +110,6 @@ export interface Settings {
   initialSabotageCooldownSec: number;
   reactorSec: number;
   oxygenSec: number;
-  doorsSec: number;
   /** Durée pendant laquelle un corps non découvert reste signalable (0 = jusqu'à la prochaine réunion). */
   bodyTimeoutSec: number;
   /** Les fantômes voient-ils le rôle des autres joueurs ? (désactivé par défaut pour limiter les fuites) */
@@ -170,6 +171,8 @@ export interface PlayerState {
   blockedUntil: number;
   checkedIn: boolean;
   kills: number;
+  /** Abonnement aux notifications push (téléphone en veille). */
+  push?: PushSubscriptionData;
 }
 
 export interface ActiveSabotage {
@@ -178,9 +181,6 @@ export interface ActiveSabotage {
   startedAt: number;
   /** Fin du compte à rebours des sabotages critiques. */
   deadline?: number;
-  /** Fin de la fermeture d'une salle (sabotage « portes »). */
-  endsAt?: number;
-  roomId?: string;
   /** Postes déjà réparés (oxygène). */
   fixed: string[];
   /** Mains posées sur les postes du réacteur. */
@@ -263,7 +263,7 @@ export interface GameState {
   sabotage?: ActiveSabotage;
   /** Progression affichée quand la barre ne se met à jour qu'en réunion. */
   taskBarSnapshot: number;
-  sabotageHistory: { kind: SabotageKind; by: string; at: number; outcome: string; roomId?: string }[];
+  sabotageHistory: { kind: SabotageKind; by: string; at: number; outcome: string }[];
   meeting?: Meeting;
   meetings: MeetingRecord[];
   winner?: Winner;
@@ -274,6 +274,16 @@ export interface GameState {
   nextAlertId: number;
   reclaim: { playerId: string; codeHash: string; expiresAt: number }[];
   gmFailures: number[];
+  /** Clés VAPID de la partie (la clé privée ne quitte jamais le serveur). */
+  vapid?: VapidKeys;
+  /** Adresse du site, utilisée comme identité VAPID. */
+  origin?: string;
+  /** Abonnements push des appareils du MJ (alertes sécurité). */
+  gmPush: PushSubscriptionData[];
+  /** Compteur des « tests d'alerte » envoyés par le MJ. */
+  pingId: number;
+  /** Mini-jeu en cours de test par le MJ (n'affecte pas la partie). */
+  gmChallenge?: Challenge;
   seq: number;
   /** Dernière modification (pour l'effacement automatique après inactivité). */
   updatedAt?: number;

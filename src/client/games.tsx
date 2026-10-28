@@ -8,6 +8,27 @@ import type { ChallengeView } from '../shared/engine';
 import { WIRE_COLORS } from '../shared/puzzles';
 import { buzz, fmtSec } from './ui';
 
+
+/** État dont la valeur courante est lisible immédiatement (appuis rapides : pas de valeur périmée). */
+function useLive<T>(initial: T): [T, { current: T }, (v: T) => void] {
+  const [v, setV] = useState(initial);
+  const ref = useRef(initial);
+  return [v, ref, (x: T) => {
+    ref.current = x;
+    setV(x);
+  }];
+}
+
+/** Appelle done() une seule fois. */
+function useOnce(done: (a: unknown) => void) {
+  const fired = useRef(false);
+  return (a: unknown) => {
+    if (fired.current) return;
+    fired.current = true;
+    done(a);
+  };
+}
+
 export interface GameProps {
   c: ChallengeView;
   done: (answer: unknown) => void;
@@ -17,8 +38,9 @@ export interface GameProps {
 function Wires({ c, done }: GameProps) {
   const left = c.params.left as number[];
   const right = c.params.right as number[];
-  const [links, setLinks] = useState<(number | undefined)[]>([undefined, undefined, undefined, undefined]);
-  const [sel, setSel] = useState<number>();
+  const finish = useOnce(done);
+  const [links, linksRef, setLinks] = useLive<(number | undefined)[]>([undefined, undefined, undefined, undefined]);
+  const [sel, selRef, setSel] = useLive<number | undefined>(undefined);
   const used = new Set(links.filter((x) => x !== undefined));
   return (
     <div class="game">
@@ -29,24 +51,26 @@ function Wires({ c, done }: GameProps) {
               class={`wire ${sel === i ? 'sel' : ''} ${links[i] !== undefined ? 'done' : ''}`}
               style={{ background: WIRE_COLORS[color] }}
               aria-label={`Fil gauche ${i + 1}`}
-              onClick={() => links[i] === undefined && setSel(i)}
+              onClick={() => linksRef.current[i] === undefined && setSel(i)}
             />
             <button
               class={`wire ${used.has(i) ? 'done' : ''}`}
               style={{ background: WIRE_COLORS[right[i]] }}
               aria-label={`Prise droite ${i + 1}`}
               onClick={() => {
-                if (sel === undefined || used.has(i)) return;
-                if (right[i] !== left[sel]) {
+                const s0 = selRef.current;
+                const cur = linksRef.current;
+                if (s0 === undefined || cur.includes(i)) return;
+                if (right[i] !== left[s0]) {
                   buzz(80);
                   setSel(undefined);
                   return;
                 }
-                const next = links.slice();
-                next[sel] = i;
+                const next = cur.slice();
+                next[s0] = i;
                 setLinks(next);
                 setSel(undefined);
-                if (next.every((x) => x !== undefined)) done(next);
+                if (next.every((x) => x !== undefined)) finish(next);
               }}
             />
           </Fragment>
@@ -59,9 +83,10 @@ function Wires({ c, done }: GameProps) {
 
 function Sequence({ c, done }: GameProps) {
   const seq = c.params.seq as number[];
+  const finish = useOnce(done);
   const [lit, setLit] = useState<number>();
   const [showing, setShowing] = useState(true);
-  const [input, setInput] = useState<number[]>([]);
+  const [input, inputRef, setInput] = useLive<number[]>([]);
   const [round, setRound] = useState(0);
   useEffect(() => {
     setShowing(true);
@@ -88,26 +113,34 @@ function Sequence({ c, done }: GameProps) {
             key={k}
             class={lit === k ? 'lit' : ''}
             disabled={showing}
+            aria-label={`Case ${k + 1}`}
             onClick={() => {
-              const next = [...input, k];
+              const next = [...inputRef.current, k];
               if (seq[next.length - 1] !== k) {
                 buzz(120);
-                setRound(round + 1);
+                setInput([]);
+                setRound((r) => r + 1);
                 return;
               }
               setInput(next);
-              if (next.length === seq.length) done(next);
+              if (next.length === seq.length) finish(next);
             }}
           />
         ))}
       </div>
+      {!showing && (
+        <button class="btn small" onClick={() => setRound((r) => r + 1)}>
+          Revoir la séquence
+        </button>
+      )}
     </div>
   );
 }
 
 function Order({ c, done }: GameProps) {
   const layout = c.params.layout as number[];
-  const [next, setNext] = useState(1);
+  const finish = useOnce(done);
+  const [next, nextRef, setNext] = useLive(1);
   return (
     <div class="game">
       <div class="order">
@@ -116,15 +149,16 @@ function Order({ c, done }: GameProps) {
             key={n}
             class={n < next ? 'ok' : ''}
             onClick={() => {
-              if (n !== next) {
-                if (n >= next) {
+              const want = nextRef.current;
+              if (n !== want) {
+                if (n > want) {
                   buzz(100);
                   setNext(1);
                 }
                 return;
               }
-              if (n === 10) done('done');
               setNext(n + 1);
+              if (n === 10) finish('done');
             }}
           >
             {n}
@@ -136,9 +170,10 @@ function Order({ c, done }: GameProps) {
 }
 
 function Calibrate({ done }: GameProps) {
+  const finish = useOnce(done);
   const zone = useMemo(() => ({ from: 30 + Math.random() * 40, w: 16 }), []);
   const [pos, setPos] = useState(0);
-  const [hits, setHits] = useState(0);
+  const [hits, hitsRef, setHits] = useLive(0);
   const posRef = useRef(0);
   useEffect(() => {
     let dir = 1;
@@ -164,9 +199,9 @@ function Calibrate({ done }: GameProps) {
         onClick={() => {
           const p = posRef.current;
           if (p >= zone.from && p <= zone.from + zone.w) {
-            const h = hits + 1;
+            const h = hitsRef.current + 1;
             setHits(h);
-            if (h >= 3) done('done');
+            if (h >= 3) finish('done');
           } else {
             buzz(100);
             setHits(0);
@@ -289,7 +324,8 @@ function Swipe({ done }: GameProps) {
 }
 
 function Targets({ done }: GameProps) {
-  const [n, setN] = useState(0);
+  const finish = useOnce(done);
+  const [n, nRef, setN] = useLive(0);
   const pos = useMemo(() => ({ x: 12 + Math.random() * 76, y: 12 + Math.random() * 76 }), [n]);
   return (
     <div class="game">
@@ -300,8 +336,9 @@ function Targets({ done }: GameProps) {
             aria-label="Cible"
             style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
             onClick={() => {
-              if (n + 1 >= 8) done('done');
-              setN(n + 1);
+              const k = nRef.current + 1;
+              setN(k);
+              if (k >= 8) finish('done');
             }}
           />
         )}
@@ -334,7 +371,8 @@ function TextAnswer({ c, done, numeric }: GameProps & { numeric?: boolean }) {
 }
 
 function Switches({ c, done }: GameProps) {
-  const [st, setSt] = useState<boolean[]>(c.params.states as boolean[]);
+  const finish = useOnce(done);
+  const [st, stRef, setSt] = useLive<boolean[]>(c.params.states as boolean[]);
   return (
     <div class="game">
       <div class="switches">
@@ -342,11 +380,12 @@ function Switches({ c, done }: GameProps) {
           <button
             key={i}
             class={on ? 'on' : 'off'}
+            aria-pressed={on}
             onClick={() => {
-              const next = st.slice();
-              next[i] = !on;
+              const next = stRef.current.slice();
+              next[i] = !next[i];
               setSt(next);
-              if (next.every(Boolean)) done('done');
+              if (next.every(Boolean)) finish('done');
             }}
           >
             {on ? 'MARCHE' : 'ARRÊT'}

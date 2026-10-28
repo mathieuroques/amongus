@@ -18,8 +18,7 @@ Un seul sabotage à la fois, délai partagé avec vos alliés (10 s au début, 3
 - **Fusion du réacteur / fuite d’oxygène** (critiques) : si l’équipage ne répare pas à temps, vous gagnez. Attention : un signalement de corps les interrompt.
 - **Panne de courant** : les postes de tâches sont hors service (pour tout le monde, vous compris) jusqu’à la réparation au poste Énergie.
 - **Communications** : l’équipage perd sa liste de tâches et le moniteur de vie.
-- **Salle condamnée** (20 s) : personne n’entre dans la salle choisie. Idéal pour isoler une victime… ou s’offrir un alibi.
-Le bouton d’urgence est bloqué pendant tout sabotage sauf la salle condamnée.
+Le bouton d’urgence est bloqué pendant tout sabotage : un sabotage bien placé empêche l’équipage de convoquer une réunion (signaler un corps reste possible).
 
 ## Se fondre dans l’équipage
 - Vos tâches sont **factices** mais jouables : allez aux postes, scannez, jouez les mini-jeux. Rien ne compte et la barre n’avance pas : attention aux observateurs !

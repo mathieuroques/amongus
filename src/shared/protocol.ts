@@ -7,6 +7,8 @@ export type ClientMsg =
   | { t: 'join'; name: string }
   | { t: 'gmLogin'; secret: string }
   | { t: 'reclaim'; code: string }
+  /** L'application est-elle au premier plan ? (sinon on préfère une notification push) */
+  | { t: 'vis'; visible: boolean }
   | { t: 'act'; id: number; a: PlayerAction | GmAction | { type: 'reclaimCode'; playerId: string } };
 
 export type ServerMsg =

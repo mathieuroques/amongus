@@ -14,7 +14,7 @@
 
 **Réunion** — Rassemblement → discussion → vote (un joueur ou « passer », vote définitif). Le plus de voix est éjecté ; égalité ou « passer » majoritaire : personne. Le rôle de l’éjecté est annoncé.
 
-**Sabotages** — Réacteur : deux personnes maintiennent le bouton en même temps aux deux postes Réacteur. Oxygène : recopier le code aux deux postes Oxygène. Panne de courant : postes de tâches hors service → poste Énergie. Communications : liste des tâches masquée → poste Radio. Salle condamnée : on n’y entre pas (portes ouvertes).
+**Sabotages** — Réacteur : deux personnes maintiennent le bouton en même temps aux deux postes Réacteur. Oxygène : recopier le code aux deux postes Oxygène. Panne de courant : postes de tâches hors service → poste Énergie. Communications : liste des tâches masquée → poste Radio.
 
 **Fantômes** — Silence total avec les vivants, badge visible. L’équipage fantôme finit ses tâches ; l’imposteur fantôme peut saboter. Pas de vote, pas de signalement, pas de réparation.
 

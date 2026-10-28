@@ -2,7 +2,7 @@
 // - l'interface (HTML/JS/CSS/icônes) est mise en cache pour un chargement rapide et l'installation ;
 // - les requêtes /api (serveur de jeu) ne passent JAMAIS par le cache : une action de jeu
 //   n'est considérée comme faite que si le serveur l'a confirmée.
-const CACHE = 'imposteurs-v1';
+const CACHE = 'imposteurs-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
@@ -47,4 +47,36 @@ self.addEventListener('fetch', (e) => {
       ),
     );
   }
+});
+
+// --- Notifications push (téléphone en veille) ---------------------------------------
+// Le contenu est chiffré de bout en bout ; il ne contient que des informations publiques.
+self.addEventListener('push', (e) => {
+  let msg = { title: 'Imposteurs', body: 'Nouvel événement dans la partie.', tag: 'jeu', urgent: false };
+  try {
+    msg = { ...msg, ...e.data.json() };
+  } catch {
+    /* message vide */
+  }
+  e.waitUntil(
+    self.registration.showNotification(msg.title, {
+      body: msg.body,
+      tag: msg.tag,
+      renotify: true,
+      requireInteraction: !!msg.urgent,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      vibrate: msg.urgent ? [500, 150, 500, 150, 500] : [200, 100, 200],
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) if ('focus' in c) return c.focus();
+      return self.clients.openWindow('/');
+    }),
+  );
 });

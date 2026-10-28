@@ -28,7 +28,6 @@ export const DEFAULT_SETTINGS: Settings = {
   initialSabotageCooldownSec: 10, // officiel : 10 s
   reactorSec: 75, // officiel : 30 à 60 s selon la carte
   oxygenSec: 90, // officiel : 30 à 45 s
-  doorsSec: 20, // officiel : 10 s
   bodyTimeoutSec: 180,
   ghostsSeeRoles: false,
 };
@@ -54,7 +53,6 @@ export const SETTING_BOUNDS: Record<NumKey, [number, number]> = {
   initialSabotageCooldownSec: [5, 600],
   reactorSec: [30, 600],
   oxygenSec: [30, 600],
-  doorsSec: [10, 120],
   bodyTimeoutSec: [0, 1800],
 };
 

@@ -30,6 +30,8 @@ Quatre onglets, identiques pour tous les rôles :
 - **Urgence** : signaler un corps, déclarer que vous avez été éliminé·e, alerte sécurité, quitter.
 - **Rôle** : votre rôle (masqué par défaut), et pour les imposteurs les éliminations, sabotages et conduits.
 
+**Alertes** : réunions, sabotages critiques et arrêt d’urgence s’affichent en plein écran avec un son (et une vibration sur Android). Dans le salon, réglez votre téléphone avec la carte « Alertes de ce téléphone » : tester le son, activer les notifications pour l’écran verrouillé (sur iPhone : ajouter d’abord le jeu à l’écran d’accueil), garder l’écran allumé. Le MJ annonce aussi les réunions à voix haute. Détails : `alertes-notifications.md`.
+
 ## 4. Les tâches
 - Chaque joueur reçoit **1 tâche commune** (la même pour tout le monde), **1 tâche longue** (deux étapes dans deux pièces différentes) et **2 tâches courtes**.
 - Pour faire une tâche : marchez jusqu’au poste indiqué, scannez son QR code, choisissez la tâche, réussissez le mini-jeu sur votre téléphone ou l’énigme imprimée sur la fiche (compter des symboles, remettre des bandes de papier dans l’ordre).
@@ -55,7 +57,7 @@ Quatre onglets, identiques pour tous les rôles :
 ## 7. Les réunions
 Une réunion commence quand :
 - un joueur vivant **signale un corps** ;
-- un joueur vivant appuie sur le **bouton d’urgence** : il va dans la salle de réunion, scanne le poste « Bouton d’urgence » et confirme. Chaque joueur dispose d’**1 réunion d’urgence** ; le bouton est indisponible pendant **30 s** après chaque réunion et au début de la partie, et **pendant un sabotage** (sauf « salle condamnée ») ;
+- un joueur vivant appuie sur le **bouton d’urgence** : il va dans la salle de réunion, scanne le poste « Bouton d’urgence » et confirme. Chaque joueur dispose d’**1 réunion d’urgence** ; le bouton est indisponible pendant **30 s** après chaque réunion et au début de la partie, et **pendant tout sabotage** ;
 - le MJ en convoque une.
 
 Déroulement (tout s’arrête : aucune tâche, aucune élimination, aucun sabotage) :
@@ -76,7 +78,6 @@ Un seul sabotage à la fois ; délai commun à tous les imposteurs : 10 s au dé
 | **Fuite d’oxygène** (critique, 90 s) | Idem. | Aux **deux postes Oxygène** : scanner le poste et recopier le code affiché (une ou plusieurs personnes). |
 | **Panne de courant** | Les postes de tâches sont hors service pour tous les vivants. | Au poste **Énergie (fictif)** : remettre les 5 interrupteurs sur MARCHE. |
 | **Communications coupées** | Liste des tâches, barre de progression et moniteur de vie masqués pour les vivants. On peut encore faire une tâche si on se souvient de son poste. | Au poste **Radio** : aligner les deux ondes. |
-| **Salle condamnée** (20 s) | **Personne n’entre** dans la salle choisie ; les portes restent ouvertes et on peut toujours en sortir. Postes de la salle indisponibles. | Se rouvre seule. |
 
 ## 9. Le moniteur de vie
 Le poste « Moniteur de vie » montre qui est vivant ou mort à l’instant présent (indisponible pendant « Communications coupées »).
@@ -90,7 +91,7 @@ Un joueur éliminé ou éjecté devient **fantôme** :
 - Pendant les réunions, il s’installe à l’écart et écoute sans réagir.
 - Les fantômes peuvent parler entre eux à voix basse, loin des vivants.
 
-## 11. Les conduits (facultatif)
+## 11. Les conduits (facultatif, rarement utilisés)
 Le MJ peut définir des **conduits** : des itinéraires sûrs que **seuls les imposteurs vivants** ont le droit d’emprunter. Un équipier qui voit quelqu’un sortir d’un conduit a une preuve.
 
 ## 12. Fin de partie

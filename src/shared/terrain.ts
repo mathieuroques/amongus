@@ -134,18 +134,8 @@ export function generateTerrain(seeds: RoomSeed[], meetingIndex = 0, rng: Rng = 
 }
 
 export function exampleTerrain(rng: Rng = cryptoRng): Terrain {
-  const t = generateTerrain(EXAMPLE_ROOMS, 0, rng, 'Maison d’exemple');
-  const room = (n: string) => t.rooms.find((r) => r.name === n)!;
-  t.passages = [
-    {
-      id: newId('p', rng),
-      name: 'Conduit du jardin',
-      fromRoomId: room('Cuisine').id,
-      toRoomId: room('Entrée').id,
-      notes: 'Passage par la terrasse éclairée, en marchant. Réservé aux imposteurs.',
-    },
-  ];
-  return t;
+  // Pas de « conduit » par défaut : seul le MJ sait si sa maison offre un second itinéraire sûr.
+  return generateTerrain(EXAMPLE_ROOMS, 0, rng, 'Maison d\u2019exemple');
 }
 
 const GAME_KINDS = Object.keys(GAMES) as GameKind[];
@@ -234,7 +224,6 @@ export function availableSabotages(t: Terrain): SabotageKind[] {
   if (count('oxygen') >= 2) out.push('oxygen');
   if (count('lights') >= 1) out.push('lights');
   if (count('comms') >= 1) out.push('comms');
-  if (t.rooms.some((r) => !r.forbidden && !r.transit && r.id !== t.meetingRoomId)) out.push('doors');
   return out;
 }
 
@@ -254,4 +243,26 @@ export function startProblems(t: Terrain, s: Settings, playerCount: number): str
   if (n('short') < s.shortTasks) p.push(`Pas assez de tâches courtes actives (${n('short')} pour ${s.shortTasks} demandées).`);
   if (s.commonTasks + s.longTasks + s.shortTasks === 0) p.push('Chaque joueur doit avoir au moins une tâche.');
   return p;
+}
+
+/** Avertissements non bloquants pour aider le MJ à préparer un bon terrain. */
+export function terrainWarnings(t: Terrain): string[] {
+  const w: string[] = [];
+  const count = (k: StationKind) => t.stations.filter((s) => s.kind === k).length;
+  if (count('reactor') < 2) w.push('Moins de 2 postes Réacteur : le sabotage « Fusion du réacteur » est désactivé.');
+  if (count('oxygen') < 2) w.push('Moins de 2 postes Oxygène : le sabotage « Fuite d’oxygène » est désactivé.');
+  if (count('lights') < 1) w.push('Pas de poste Énergie : la « Panne de courant » est désactivée.');
+  if (count('comms') < 1) w.push('Pas de poste Radio : « Communications coupées » est désactivé.');
+  const roomOf = (id: string) => t.stations.find((s) => s.id === id)?.roomId;
+  for (const k of t.tasks.filter((x) => x.enabled && x.steps.length > 1)) {
+    const rooms = new Set(k.steps.map((s) => roomOf(s.stationId)));
+    if (rooms.size < k.steps.length) w.push(`Tâche longue « ${k.name} » : plusieurs étapes dans la même pièce (moins de déplacements).`);
+  }
+  for (const s of t.stations.filter((x) => x.kind === 'task')) {
+    if (!t.tasks.some((k) => k.enabled && k.steps.some((st) => st.stationId === s.id))) w.push(`Le poste « ${s.name} » n’a aucune tâche active : inutile de l’imprimer.`);
+  }
+  for (const r of t.rooms.filter((x) => !x.forbidden && !x.transit)) {
+    if (!t.stations.some((s) => s.roomId === r.id)) w.push(`La pièce « ${r.name} » n’a aucun poste : personne n’aura de raison d’y aller.`);
+  }
+  return w;
 }

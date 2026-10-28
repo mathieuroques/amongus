@@ -1,6 +1,8 @@
 import { marked } from 'marked';
 import { useMemo, useState } from 'preact/hooks';
+import alertes from '../../docs/alertes-notifications.md?raw';
 import equipage from '../../docs/guide-equipage.md?raw';
+import limites from '../../docs/limites-mecaniques.md?raw';
 import fantomes from '../../docs/guide-fantomes.md?raw';
 import imposteurs from '../../docs/guide-imposteurs.md?raw';
 import mj from '../../docs/guide-maitre-du-jeu.md?raw';
@@ -16,7 +18,9 @@ const DOCS = [
   ['Imposteurs', imposteurs],
   ['Fantômes', fantomes],
   ['Sécurité', securite],
+  ['Alertes', alertes],
   ['Maître du jeu', mj],
+  ['Adaptations', limites],
 ] as const;
 
 export function RulesPage() {

@@ -8,13 +8,17 @@ import {
 } from '../shared/engine';
 import type { ClientMsg, ServerMsg } from '../shared/protocol';
 import { cryptoRng, randomCode, randomToken, sha256 } from '../shared/rng';
+import { pushEvents, snapshot, type Snapshot } from '../shared/notify';
 import type { GameState } from '../shared/types';
+import { buildPushRequest, generateVapidKeys, type PushMessage, type PushSubscriptionData } from '../shared/webpush';
 import { viewForGm, viewForPlayer } from '../shared/view';
 import type { Env } from './index';
 
 interface Attachment {
   k: 'anon' | 'p' | 'gm';
   pid?: string;
+  /** Application en arrière-plan (onglet caché, écran éteint). */
+  hidden?: boolean;
 }
 
 const MAX_MSG = 400_000;
@@ -22,6 +26,8 @@ const RATE_WINDOW = 10_000;
 const RATE_MAX = 60;
 /** Une partie inactive depuis 7 jours est effacée. */
 export const RETENTION_MS = 7 * 24 * 3600_000;
+/** Nombre maximal de notifications envoyées pour un événement (limite de sous-requêtes de l'offre gratuite : 50). */
+const MAX_PUSH = 45;
 
 export class GameRoom extends DurableObject<Env> {
   private state?: GameState;
@@ -41,8 +47,10 @@ export class GameRoom extends DurableObject<Env> {
     const url = new URL(req.url);
     if (url.pathname === '/init') {
       if (this.state) return new Response('exists', { status: 409 });
-      const body = (await req.json()) as { code: string; gmTokenHash: string; gmSecretHash: string; settings?: unknown; terrain?: unknown };
+      const body = (await req.json()) as { code: string; gmTokenHash: string; gmSecretHash: string; settings?: unknown; terrain?: unknown; origin?: string };
       this.state = createGame(body.code, body.gmTokenHash, body.gmSecretHash, Date.now(), body.settings, body.terrain);
+      this.state.origin = body.origin;
+      this.state.vapid = await generateVapidKeys();
       await this.save();
       return new Response('ok');
     }
@@ -159,12 +167,29 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     const a = this.att(ws);
+    const before = snapshot(s);
+    try {
+      await this.handle(ws, msg, a, now);
+    } finally {
+      this.notify(before);
+    }
+  }
 
+  private async handle(ws: WebSocket, msg: ClientMsg, a: Attachment, now: number) {
+    const s = this.state!;
     // Avant tout traitement, les minuteurs échus sont appliqués (une action ne peut pas « passer » après la fin d'un délai).
     if (tick(s, now)) await this.save();
 
     switch (msg.t) {
+      case 'vis': {
+        ws.serializeAttachment({ ...a, hidden: !msg.visible } satisfies Attachment);
+        return;
+      }
       case 'hello': {
+        if (!s.vapid) {
+          s.vapid = await generateVapidKeys();
+          await this.save();
+        }
         const h = await sha256(String(msg.token ?? ''));
         if (s.gmTokenHashes.includes(h)) {
           ws.serializeAttachment({ k: 'gm' } satisfies Attachment);
@@ -264,6 +289,46 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
+  /** Notifications push pour les appareils dont l'application n'est pas au premier plan. */
+  private notify(before: Snapshot) {
+    const s = this.state;
+    if (!s?.vapid) return;
+    const ev = pushEvents(before, s);
+    if (!ev.players.length && !ev.gm.length) return;
+    const visible = new Set<string>();
+    for (const ws of this.ctx.getWebSockets()) {
+      const at = this.att(ws);
+      if (!at.hidden) visible.add(at.k === 'gm' ? 'gm' : at.pid ?? '');
+    }
+    const jobs: { sub: PushSubscriptionData; msg: PushMessage; owner: string }[] = [];
+    for (const msg of ev.players) {
+      for (const p of s.players) if (p.push && !p.kicked && !p.left && !visible.has(p.id)) jobs.push({ sub: p.push, msg, owner: p.id });
+    }
+    if (!visible.has('gm')) for (const msg of ev.gm) for (const sub of s.gmPush) jobs.push({ sub, msg, owner: 'gm' });
+    const subject = s.origin?.startsWith('https://') ? s.origin : 'mailto:imposteurs@example.invalid';
+    const keys = s.vapid;
+    const dead: { owner: string; endpoint: string }[] = [];
+    const work = Promise.allSettled(
+      jobs.slice(0, MAX_PUSH).map(async (j) => {
+        const { url, init } = await buildPushRequest(j.sub, j.msg, keys, subject);
+        const r = await fetch(url, init);
+        if (r.status === 404 || r.status === 410) dead.push({ owner: j.owner, endpoint: j.sub.endpoint });
+      }),
+    ).then(async () => {
+      if (!dead.length || !this.state) return;
+      // abonnements expirés : on les oublie
+      for (const d of dead) {
+        if (d.owner === 'gm') this.state.gmPush = this.state.gmPush.filter((x) => x.endpoint !== d.endpoint);
+        else {
+          const p = this.state.players.find((x) => x.id === d.owner);
+          if (p?.push?.endpoint === d.endpoint) p.push = undefined;
+        }
+      }
+      await this.save();
+    });
+    this.ctx.waitUntil(work);
+  }
+
   private async makeReclaim(playerId: string, now: number) {
     const s = this.state!;
     const p = s.players.find((x) => x.id === playerId && !x.kicked);
@@ -306,9 +371,11 @@ export class GameRoom extends DurableObject<Env> {
       this.state = undefined;
       return;
     }
+    const before = snapshot(s);
     if (tick(s, Date.now())) {
       await this.save();
       this.broadcast();
+      this.notify(before);
     } else {
       await this.scheduleAlarm();
     }

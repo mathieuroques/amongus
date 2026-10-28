@@ -69,11 +69,6 @@ export const SABOTAGE_INFO: Record<SabotageKind, { label: string; critical: bool
     critical: false,
     short: 'Liste des tâches, barre de progression et moniteur masqués. Réparez au poste Radio.',
   },
-  doors: {
-    label: 'Salle condamnée',
-    critical: false,
-    short: 'Personne n’entre dans la salle (les portes restent physiquement ouvertes). Postes de cette salle indisponibles.',
-  },
 };
 
 export const SYMBOLS = ['▲', '●', '■', '★', '♦', '✚'] as const;

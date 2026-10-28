@@ -1,13 +1,14 @@
 // Moteur de règles : fonctions pures qui modifient l'état de la partie.
 // Toutes les vérifications d'éligibilité sont faites ici, côté serveur.
 
-import { SABOTAGE_INFO } from './catalog';
+import { FIXES, SABOTAGE_INFO } from './catalog';
 import { checkAnswer, makeFixChallenge, makeTaskChallenge } from './puzzles';
 import { cryptoRng, normalizeCode, randomDigits, shuffle, type Rng } from './rng';
+import { validSubscription } from './webpush';
 import { DEFAULT_SETTINGS, sanitizeSettings } from './settings';
 import { availableSabotages, exampleTerrain, newId, sanitizeTerrain, startProblems } from './terrain';
 import type {
-  ActiveSabotage, Challenge, GameState, Meeting, PlayerState, SabotageKind, Settings, Station, Terrain, VoteResult, Winner,
+  ActiveSabotage, Challenge, FixKind, GameState, Meeting, PlayerState, SabotageKind, Settings, Station, Terrain, VoteResult, Winner,
 } from './types';
 
 export class GameError extends Error {
@@ -70,6 +71,8 @@ export function createGame(code: string, gmTokenHash: string, gmSecretHash: stri
     nextAlertId: 1,
     reclaim: [],
     gmFailures: [],
+    gmPush: [],
+    pingId: 0,
     seq: 0,
   };
 }
@@ -262,7 +265,7 @@ export function startGame(s: GameState, ctx: Ctx) {
 export function endGame(s: GameState, winner: Winner, reason: string, now: number) {
   if (s.phase === 'ended') return;
   if (s.sabotage) {
-    s.sabotageHistory.push({ kind: s.sabotage.kind, by: s.sabotage.by, at: s.sabotage.startedAt, outcome: winner === 'impostors' && SABOTAGE_INFO[s.sabotage.kind].critical ? 'non réparé (fin de partie)' : 'en cours à la fin', roomId: s.sabotage.roomId });
+    s.sabotageHistory.push({ kind: s.sabotage.kind, by: s.sabotage.by, at: s.sabotage.startedAt, outcome: winner === 'impostors' && SABOTAGE_INFO[s.sabotage.kind].critical ? 'non réparé (fin de partie)' : 'en cours à la fin' });
     s.sabotage = undefined;
   }
   if (s.meeting) archiveMeeting(s);
@@ -322,7 +325,7 @@ function clearVolatile(s: GameState) {
 export function startMeeting(s: GameState, kind: Meeting['kind'], now: number, callerId?: string, bodyOf?: string) {
   clearVolatile(s);
   let endedSabotage: SabotageKind | undefined;
-  if (s.sabotage && (SABOTAGE_INFO[s.sabotage.kind].critical || s.sabotage.kind === 'doors')) {
+  if (s.sabotage && SABOTAGE_INFO[s.sabotage.kind].critical) {
     endedSabotage = s.sabotage.kind;
     resolveSabotage(s, now, 'interrompu par la réunion');
   }
@@ -465,11 +468,11 @@ function maybeEndGather(s: GameState, now: number) {
 export function resolveSabotage(s: GameState, now: number, outcome: string) {
   const sab = s.sabotage;
   if (!sab) return;
-  s.sabotageHistory.push({ kind: sab.kind, by: sab.by, at: sab.startedAt, outcome, roomId: sab.roomId });
+  s.sabotageHistory.push({ kind: sab.kind, by: sab.by, at: sab.startedAt, outcome });
   s.sabotage = undefined;
-  if (sab.kind !== 'doors') s.sabotageCooldownUntil = Math.max(s.sabotageCooldownUntil, now + sec(s.settings.sabotageCooldownSec));
+  s.sabotageCooldownUntil = Math.max(s.sabotageCooldownUntil, now + sec(s.settings.sabotageCooldownSec));
   for (const p of s.players) if (p.challenge?.purpose === 'fix') p.challenge = undefined;
-  log(s, now, 'sabotage_end', `${SABOTAGE_INFO[sab.kind].label}${sab.roomId ? ' (' + roomName(s, sab.roomId) + ')' : ''} : ${outcome}.`);
+  log(s, now, 'sabotage_end', `${SABOTAGE_INFO[sab.kind].label} : ${outcome}.`);
 }
 
 function freshHolds(sab: ActiveSabotage, now: number) {
@@ -523,10 +526,7 @@ export function tick(s: GameState, now: number): boolean {
         endGame(s, 'impostors', `${SABOTAGE_INFO[sab.kind].label} : le sabotage critique n’a pas été réparé à temps.`, now);
         return true;
       }
-      if (sab.endsAt && sab.endsAt <= now) {
-        resolveSabotage(s, now, 'terminé');
-        changed = true;
-      } else if (sab.kind === 'reactor') {
+      if (sab.kind === 'reactor') {
         const n = sab.holds.length;
         sab.holds = freshHolds(sab, now);
         if (sab.holds.length !== n) changed = true;
@@ -557,7 +557,6 @@ export function nextWakeup(s: GameState, now: number): number | undefined {
     const sab = s.sabotage;
     if (sab) {
       if (sab.deadline) times.push(sab.deadline);
-      if (sab.endsAt) times.push(sab.endsAt);
       for (const h of sab.holds) times.push(h.beat + HOLD_STALE_MS);
       const f = reactorFixTime(s, now);
       if (f !== undefined) times.push(f);
@@ -572,7 +571,6 @@ function shiftTimers(s: GameState, delta: number) {
   if (s.meeting) s.meeting.stageEndsAt += delta;
   if (s.sabotage) {
     if (s.sabotage.deadline) s.sabotage.deadline += delta;
-    if (s.sabotage.endsAt) s.sabotage.endsAt += delta;
     s.sabotage.holds = [];
   }
   for (const p of s.players) {
@@ -598,13 +596,15 @@ export type PlayerAction =
   | { type: 'arm' }
   | { type: 'disarm' }
   | { type: 'killed'; code: string }
-  | { type: 'sabotage'; kind: SabotageKind; roomId?: string }
+  | { type: 'sabotage'; kind: SabotageKind }
   | { type: 'fixStart'; code: string }
   | { type: 'hold'; code: string; on: boolean }
   | { type: 'checkIn' }
   | { type: 'vote'; target: string }
   | { type: 'alert'; message?: string }
-  | { type: 'leave' };
+  | { type: 'leave' }
+  | { type: 'pushSubscribe'; subscription: unknown }
+  | { type: 'pushUnsubscribe' };
 
 function challengeView(s: GameState, c: Challenge) {
   const station = s.terrain.stations.find((x) => x.id === c.stationId);
@@ -621,10 +621,18 @@ function challengeView(s: GameState, c: Challenge) {
   };
 }
 export type ChallengeView = ReturnType<typeof challengeView>;
+
+/** Vue du mini-jeu testé par le MJ : la réponse attendue est montrée pour vérifier les fiches papier. */
+export function gmChallengeView(s: GameState) {
+  const c = s.gmChallenge;
+  if (!c) return undefined;
+  const v = challengeView(s, c);
+  const paper = c.game === 'count' || c.game === 'assemble';
+  return { ...v, taskName: c.purpose === 'fix' ? FIXES[c.game as FixKind].label : v.taskName, expected: paper ? String(c.answer) : undefined };
+}
 export { challengeView };
 
 function taskBlockReason(s: GameState, p: PlayerState, station: Station): string | undefined {
-  if (s.sabotage?.kind === 'doors' && s.sabotage.roomId === station.roomId) return 'Salle condamnée : revenez quand elle sera rouverte.';
   // Tous les vivants sont concernés (imposteurs compris) : le téléphone d'un imposteur se comporte comme celui d'un équipier.
   if (s.sabotage?.kind === 'lights' && p.alive) return 'Panne de courant : les postes sont hors service. Réparez au poste Énergie.';
   if (bodyPending(p)) return 'Vous êtes un corps : restez sur place jusqu’à la découverte ou la prochaine réunion.';
@@ -653,7 +661,7 @@ function scanStation(s: GameState, p: PlayerState, station: Station, now: number
       let block: string | undefined;
       if (!p.alive) block = 'Les fantômes ne peuvent pas convoquer de réunion.';
       else if (p.emergencyLeft <= 0) block = 'Vous avez utilisé toutes vos réunions d’urgence.';
-      else if (s.sabotage && s.sabotage.kind !== 'doors') block = 'Impossible pendant un sabotage : réparez d’abord !';
+      else if (s.sabotage) block = 'Impossible pendant un sabotage : réparez d’abord !';
       else if (now < s.emergencyCooldownUntil) block = `Bouton disponible dans ${Math.ceil((s.emergencyCooldownUntil - now) / 1000)} s.`;
       return { ...base, emergencyLeft: p.emergencyLeft, block };
     }
@@ -681,6 +689,16 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
   const { now, rng } = ctx;
   const p = getPlayer(s, playerId);
   switch (a?.type) {
+    case 'pushSubscribe': {
+      const sub = validSubscription(a.subscription);
+      if (!sub) fail('bad_push', 'Abonnement aux notifications refusé (service de notification inconnu).');
+      p.push = sub;
+      return { ok: true };
+    }
+    case 'pushUnsubscribe': {
+      p.push = undefined;
+      return { ok: true };
+    }
     case 'alert': {
       const message = String(a.message ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 200) || 'Alerte sécurité';
       s.alerts.push({ id: s.nextAlertId++, at: now, playerId: p.id, message, acked: false });
@@ -868,13 +886,6 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       const sab: ActiveSabotage = { kind, by: p.id, startedAt: now, fixed: [], holds: [] };
       if (kind === 'reactor') sab.deadline = now + sec(st.reactorSec);
       if (kind === 'oxygen') sab.deadline = now + sec(st.oxygenSec);
-      if (kind === 'doors') {
-        const room = s.terrain.rooms.find((r) => r.id === a.roomId);
-        if (!room || room.forbidden || room.transit || room.id === s.terrain.meetingRoomId) fail('bad_room', 'Choisissez une salle valide (pas la salle de réunion).');
-        sab.roomId = room!.id;
-        sab.endsAt = now + sec(st.doorsSec);
-        s.sabotageCooldownUntil = now + sec(st.sabotageCooldownSec); // pour les portes, le délai part du déclenchement
-      }
       s.sabotage = sab;
       // Effets immédiats sur les mini-jeux en cours.
       for (const x of s.players) {
@@ -883,7 +894,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
         const station = s.terrain.stations.find((y) => y.id === c.stationId);
         if (station && taskBlockReason(s, x, station)) x.challenge = undefined;
       }
-      log(s, now, 'sabotage', `Sabotage : ${SABOTAGE_INFO[kind].label}${sab.roomId ? ' (' + roomName(s, sab.roomId) + ')' : ''}.`);
+      log(s, now, 'sabotage', `Sabotage : ${SABOTAGE_INFO[kind].label}.`);
       log(s, now, 'sabotage_by', `Sabotage déclenché par ${p.name}.`, true);
       return { ok: true };
     }
@@ -897,7 +908,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
         fail('bad_code', 'Code de poste inconnu.');
       }
       const sab = s.sabotage;
-      if (!sab || sab.kind === 'reactor' || sab.kind === 'doors' || (sab.kind as string) !== station!.kind) fail('nothing', 'Rien à réparer ici pour le moment.');
+      if (!sab || sab.kind === 'reactor' || (sab.kind as string) !== station!.kind) fail('nothing', 'Rien à réparer ici pour le moment.');
       if (sab!.kind === 'oxygen' && sab!.fixed.includes(station!.id)) fail('already', 'Ce poste est déjà réparé : allez à l’autre poste Oxygène !');
       const kind = sab!.kind === 'lights' ? 'switches' : sab!.kind === 'comms' ? 'tune' : 'pin';
       const ch = makeFixChallenge(kind, rng);
@@ -1021,7 +1032,13 @@ export type GmAction =
   | { type: 'fixSabotage' }
   | { type: 'markLeft'; playerId: string }
   | { type: 'ackAlert'; id: number }
-  | { type: 'newGame' };
+  | { type: 'newGame' }
+  | { type: 'ping' }
+  | { type: 'pushSubscribe'; subscription: unknown }
+  | { type: 'testTask'; taskId: string; stepIndex?: number }
+  | { type: 'testFix'; kind: FixKind }
+  | { type: 'testSubmit'; challengeId: string; answer: unknown }
+  | { type: 'testCancel' };
 
 export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
   const { now } = ctx;
@@ -1168,6 +1185,45 @@ export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
       markLeft(s, p, now, `${p.name} a quitté la partie (déclaré par le maître du jeu).`);
       return { ok: true };
     }
+    case 'ping':
+      s.pingId++;
+      log(s, now, 'gm', 'Test d\u2019alerte envoyé à tous les téléphones.');
+      return { ok: true, pingId: s.pingId };
+    case 'pushSubscribe': {
+      const sub = validSubscription(a.subscription);
+      if (!sub) fail('bad_push', 'Abonnement aux notifications refusé.');
+      s.gmPush = [...s.gmPush.filter((x) => x.endpoint !== sub!.endpoint), sub!].slice(-5);
+      return { ok: true };
+    }
+    case 'testTask': {
+      const def = s.terrain.tasks.find((t) => t.id === a.taskId);
+      if (!def) fail('no_task', 'Tâche introuvable (terrain non enregistré ?).');
+      const idx = Math.max(0, Math.min(def!.steps.length - 1, Number(a.stepIndex) || 0));
+      const step = def!.steps[idx];
+      const ch = makeTaskChallenge(step.game, def!.seed, ctx.rng);
+      if (step.game === 'scan') ch.params = { visual: true };
+      s.gmChallenge = { id: newId('c', ctx.rng), purpose: 'task', taskId: def!.id, stepIndex: idx, stationId: step.stationId, game: ch.game, params: ch.params, answer: ch.answer, startedAt: now, minMs: ch.minMs };
+      return gmChallengeView(s);
+    }
+    case 'testFix': {
+      if (!['switches', 'tune', 'pin'].includes(a.kind)) fail('bad_fix', 'Réparation inconnue.');
+      const ch = makeFixChallenge(a.kind, ctx.rng);
+      const kind = a.kind === 'switches' ? 'lights' : a.kind === 'tune' ? 'comms' : 'oxygen';
+      const st = s.terrain.stations.find((x) => x.kind === kind);
+      s.gmChallenge = { id: newId('c', ctx.rng), purpose: 'fix', stationId: st?.id ?? '', game: ch.game, params: ch.params, answer: ch.answer, startedAt: now, minMs: ch.minMs };
+      return gmChallengeView(s);
+    }
+    case 'testSubmit': {
+      const c = s.gmChallenge;
+      if (!c || c.id !== a.challengeId) fail('no_challenge', 'Ce test n\u2019est plus actif.');
+      if (now - c!.startedAt < c!.minMs - 300) fail('too_fast', 'Trop rapide : la durée minimale du mini-jeu n\u2019est pas écoulée.');
+      if (!checkAnswer(c!.game, c!.answer, a.answer)) fail('wrong', 'Réponse refusée par le serveur.');
+      s.gmChallenge = undefined;
+      return { ok: true, game: c!.game };
+    }
+    case 'testCancel':
+      s.gmChallenge = undefined;
+      return { ok: true };
     case 'ackAlert': {
       const al = s.alerts.find((x) => x.id === a.id);
       if (al) al.acked = true;

@@ -6,7 +6,8 @@ import { PlayerApp } from './player';
 import { PrintPage } from './print';
 import { RulesPage } from './rules';
 import { sessions, storageAvailable } from './session';
-import { toast, Toasts, unlockAudio } from './ui';
+import { isIOS, isStandalone } from './alerts';
+import { Collapse, ConfirmHost, toast, Toasts, unlockAudio } from './ui';
 
 function useHash(): string {
   const [h, setH] = useState(location.hash.slice(1) || '/');
@@ -44,6 +45,7 @@ export function App() {
     <>
       {page}
       <Toasts />
+      <ConfirmHost />
     </>
   );
 }
@@ -51,12 +53,12 @@ export function App() {
 function Home({ presetCode }: { presetCode?: string }) {
   const ps = sessions.player();
   const gs = sessions.gm();
-  const [mode, setMode] = useState<'join' | 'gm' | 'reclaim'>('join');
+  const [mode, setMode] = useState<'join' | 'gm' | 'reclaim' | undefined>(presetCode ? 'join' : undefined);
   return (
     <div class="wrap stack">
-      <div class="center" style={{ paddingTop: '12px' }}>
-        <img src="/icons/icon.svg" alt="" width={84} height={84} />
-        <h1 style={{ fontSize: '2rem', margin: '6px 0 0' }}>IMPOSTEURS</h1>
+      <div class="center" style={{ paddingTop: '8px' }}>
+        <img src="/icons/icon.svg" alt="" width={76} height={76} />
+        <h1 style={{ fontSize: '2rem', margin: '4px 0 0' }}>IMPOSTEURS</h1>
         <p class="muted" style={{ marginTop: 0 }}>
           Le jeu de rôles cachés grandeur nature, inspiré d’Among Us.
         </p>
@@ -72,20 +74,30 @@ function Home({ presetCode }: { presetCode?: string }) {
           🎬 Mon tableau de bord MJ ({gs.code})
         </a>
       )}
-      <div class="row">
-        <button class={`btn small ${mode === 'join' ? 'primary' : ''}`} onClick={() => setMode('join')}>
-          Rejoindre
+      {!mode && (
+        <div class="stack">
+          <button class="btn big block primary action" onClick={() => setMode('join')}>
+            <span>🙋</span> Je rejoins une partie
+          </button>
+          <button class="btn big block action" onClick={() => setMode('gm')}>
+            <span>🎬</span> J’organise (maître du jeu)
+          </button>
+        </div>
+      )}
+      {mode && (
+        <button class="btn link" style={{ alignSelf: 'flex-start' }} onClick={() => setMode(undefined)}>
+          ← Retour
         </button>
-        <button class={`btn small ${mode === 'gm' ? 'primary' : ''}`} onClick={() => setMode('gm')}>
-          Maître du jeu
-        </button>
-        <button class={`btn small ${mode === 'reclaim' ? 'primary' : ''}`} onClick={() => setMode('reclaim')}>
-          Récupérer ma session
-        </button>
-      </div>
+      )}
       {mode === 'join' && <JoinForm preset={presetCode} />}
       {mode === 'gm' && <GmForms />}
       {mode === 'reclaim' && <ReclaimForm />}
+      {mode !== 'reclaim' && (
+        <button class="btn link" onClick={() => setMode('reclaim')}>
+          J’ai changé de téléphone / perdu ma session
+        </button>
+      )}
+      <InstallHint />
       <a class="btn block" href="#/regles">
         📖 Règles du jeu
       </a>
@@ -93,6 +105,41 @@ function Home({ presetCode }: { presetCode?: string }) {
         Aucun compte, aucune publicité. Seul un identifiant aléatoire de session est gardé sur ce téléphone. Projet de fans non affilié à Innersloth.
       </p>
     </div>
+  );
+}
+
+let installEvent: (Event & { prompt: () => Promise<void> }) | undefined;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installEvent = e as typeof installEvent;
+});
+
+function InstallHint() {
+  if (isStandalone()) return null;
+  return (
+    <Collapse title="📲 Installer l’application (facultatif)">
+      <p style={{ margin: 0 }}>Une icône sur l’écran d’accueil ouvre le jeu en plein écran et permet de recevoir les notifications quand l’écran est verrouillé.</p>
+      {isIOS() ? (
+        <p style={{ margin: 0 }}>
+          <strong>iPhone / iPad (Safari)</strong> : touchez <strong>Partager</strong> (carré avec une flèche) → <strong>Sur l’écran d’accueil</strong> → Ajouter. Ouvrez ensuite le jeu depuis l’icône.
+        </p>
+      ) : (
+        <>
+          <p style={{ margin: 0 }}>
+            <strong>Android (Chrome)</strong> : menu <strong>⋮</strong> → <strong>Installer l’application</strong> (ou « Ajouter à l’écran d’accueil »).
+          </p>
+          <button
+            class="btn"
+            onClick={async () => {
+              if (installEvent) await installEvent.prompt();
+              else toast('Utilisez le menu du navigateur : « Installer l’application ».', 'info');
+            }}
+          >
+            Installer maintenant
+          </button>
+        </>
+      )}
+    </Collapse>
   );
 }
 
@@ -107,6 +154,7 @@ async function gameInfo(code: string): Promise<{ exists: boolean; phase?: string
 
 function JoinForm({ preset }: { preset?: string }) {
   const [code, setCode] = useState(normalizeGame(preset ?? ''));
+  const [fromLink, setFromLink] = useState(GAME_CODE_RE.test(normalizeGame(preset ?? '')));
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>();
@@ -147,14 +195,20 @@ function JoinForm({ preset }: { preset?: string }) {
         };
       }}
     >
-      <h2>Rejoindre une partie</h2>
+      <h2 style={{ margin: 0 }}>{fromLink ? `Rejoindre la partie ${code}` : 'Rejoindre une partie'}</h2>
+      {fromLink ? (
+        <button type="button" class="btn link" style={{ alignSelf: 'flex-start' }} onClick={() => setFromLink(false)}>
+          Ce n’est pas le bon code ?
+        </button>
+      ) : (
+        <label class="field">
+          <span>Code de la partie (6 caractères, sur l’affiche)</span>
+          <input class="code" value={code} maxLength={6} autoComplete="off" autoCapitalize="characters" onInput={(e) => setCode(normalizeGame((e.target as HTMLInputElement).value))} />
+        </label>
+      )}
       <label class="field">
-        <span>Code de la partie</span>
-        <input class="code" value={code} maxLength={6} autoComplete="off" autoCapitalize="characters" onInput={(e) => setCode(normalizeGame((e.target as HTMLInputElement).value))} />
-      </label>
-      <label class="field">
-        <span>Votre pseudonyme (visible par tous)</span>
-        <input value={name} maxLength={16} autoComplete="nickname" onInput={(e) => setName((e.target as HTMLInputElement).value)} placeholder="ex. Lucie" />
+        <span>Votre pseudonyme (visible par tous, 2 à 16 caractères)</span>
+        <input class="name-input" value={name} maxLength={16} autoFocus={fromLink} autoComplete="nickname" enterKeyHint="go" onInput={(e) => setName((e.target as HTMLInputElement).value)} placeholder="ex. Lucie" />
       </label>
       {err && <p class="card danger">{err}</p>}
       <button class="btn big block primary" disabled={busy || name.trim().length < 2 || code.length !== 6}>

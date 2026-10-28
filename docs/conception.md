@@ -53,11 +53,17 @@ pause / arrêt d’urgence : gèle tous les minuteurs (décalés à la reprise),
 
 ### Synchronisation et reprise
 - Après chaque action acceptée : état sauvegardé, puis diffusion d’une vue filtrée à chaque téléphone. Les comptes à rebours sont des **instants absolus** du serveur ; chaque téléphone corrige le décalage de son horloge.
-- Les minuteurs (fin de rassemblement/discussion/vote, réacteur, oxygène, portes, expiration des codes, disparition des corps) sont gérés par l’**alarme** du Durable Object : ils avancent même si personne n’agit.
+- Les minuteurs (fin de rassemblement/discussion/vote, réacteur, oxygène, expiration des codes, disparition des corps) sont gérés par l’**alarme** du Durable Object : ils avancent même si personne n’agit.
 - Une action n’est affichée comme réussie qu’après l’accusé de réception du serveur. Hors connexion, l’application affiche un bandeau rouge et refuse d’envoyer ; aucune file d’attente hors ligne trompeuse.
 - Rechargement / perte de réseau : reconnexion automatique (délais croissants), réauthentification par jeton, renvoi de l’état complet. L’état d’un mort reste mort.
 - Changement de téléphone : le MJ génère un code de reconnexion (15 min, usage unique) ; l’ancien appareil est déconnecté.
 - Perte du MJ : la partie continue (les minuteurs tournent sur le serveur) ; le MJ se reconnecte avec son jeton, ou depuis un autre appareil avec le **code maître du jeu** (8 caractères, 8 essais par 10 min).
+
+### Alertes et notifications
+- Application ouverte : écran d’alerte plein écran, sons distincts (Web Audio), vibration (API Vibration, Android).
+- Application en arrière-plan : le client signale sa visibilité au serveur (`vis`) ; à chaque événement public (début, réunion, sabotage critique, STOP, fin, test d’alerte ; alertes sécurité pour le MJ), le Durable Object envoie une notification **Web Push** aux seuls appareils abonnés qui ne sont pas au premier plan.
+- Clés VAPID générées automatiquement à la création de chaque partie et stockées avec elle (aucun secret à configurer) ; contenu chiffré aes128gcm (RFC 8291), testé avec le vecteur officiel ; seuls les services de push des navigateurs (Google, Apple, Mozilla, Microsoft) sont autorisés comme destinataires, pour ne pas transformer le serveur en relais.
+- Limite de l’offre gratuite : 50 sous-requêtes par invocation → au plus 45 notifications par événement. Les abonnements expirés (réponse 404/410) sont supprimés.
 
 ## 3. Sécurité
 - Codes de partie : 6 caractères sur un alphabet sans ambiguïté (27⁶ ≈ 387 millions). Codes de postes : 4 caractères (31⁴ ≈ 923 000). Codes d’élimination et de corps : 4 chiffres, uniques parmi les codes actifs, durée de vie courte.

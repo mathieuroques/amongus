@@ -11,7 +11,8 @@
 ## Le jour J, avant l’arrivée des joueurs
 - [ ] Fiches posées (aucune dans un escalier ; « Énergie » loin du vrai tableau électrique).
 - [ ] Zones interdites signalées ; sorties et escaliers dégagés ; lumières allumées.
-- [ ] Chaque QR code vérifié avec « Vérifier une fiche imprimée ».
+- [ ] Chaque QR code vérifié (onglet 🧪 Tests → « Vérifier une fiche posée »).
+- [ ] Toutes les tâches et réparations testées (onglet 🧪 Tests : « x/y vérifiés »).
 - [ ] Affiche d’invitation à l’entrée ; Wi-Fi des invités disponible.
 - [ ] Téléphone du MJ chargé (+ batterie externe) ; tableau de bord ouvert.
 
@@ -21,7 +22,8 @@
 - [ ] Présentation de sécurité faite (zones interdites, passages, sorties, on ne court pas, élimination douce, Alerte sécurité, écran STOP).
 - [ ] Demandé qui souhaite l’élimination « sans contact ».
 - [ ] Rappel : on ne montre pas son téléphone, on ne photographie pas les postes, les fantômes se taisent.
-- [ ] Chaque joueur a testé son appareil photo dans le salon.
+- [ ] Chaque joueur a réglé ses alertes (son, notifications, écran allumé) et testé son appareil photo dans le salon.
+- [ ] « Faire sonner tous les téléphones » : chacun a levé la main.
 - [ ] Badges fantômes et pinces à disposition dans la salle de réunion.
 
 ## Pendant la partie

@@ -5,6 +5,8 @@ Un site web gratuit pour jouer à un jeu de rôles cachés **inspiré d’Among 
 - Aucune application à installer (installation facultative sur l’écran d’accueil : PWA).
 - Aucun compte joueur, aucune publicité, aucune donnée personnelle (seulement un pseudonyme, effacé 7 jours après la partie).
 - Hébergement **gratuit** sur Cloudflare (offre « Workers Free »).
+- Alertes plein écran avec son et vibration, et **notifications push** quand l’écran est verrouillé (voir [alertes et notifications](docs/alertes-notifications.md)).
+- Onglet **🧪 Tests** pour le MJ : vérifier chaque fiche posée et jouer chaque tâche avant la partie.
 
 > Projet de fans, non affilié à Innersloth. Aucun élément graphique, sonore ou textuel du jeu original n’est utilisé.
 
@@ -18,9 +20,9 @@ Un site web gratuit pour jouer à un jeu de rôles cachés **inspiré d’Among 
 2. Ouvrez cette adresse → **Maître du jeu** → **Créer une nouvelle partie**. Notez le **code maître du jeu** affiché.
 3. Onglet **Terrain** : saisissez vos pièces (cochez *Interdite* ou *Passage* pour les escaliers/couloirs), cliquez **Générer postes et tâches automatiquement**, puis **Enregistrer le terrain**.
 4. Onglet **Paramètres** : choisissez le nombre d’imposteurs (un conseil s’affiche) et **Enregistrer**.
-5. **Imprimer** : imprimez les fiches, collez-les dans les pièces (jamais dans un escalier), vérifiez-les avec « Vérifier une fiche imprimée ».
+5. **Imprimer** : imprimez les fiches, collez-les dans les pièces (jamais dans un escalier). Onglet **🧪 Tests** : scannez chaque fiche posée et testez chaque tâche (une coche ✅ par tâche).
 6. Le jour J : affichez l’**affiche d’invitation** (ou partagez le lien). Les joueurs scannent, choisissent un pseudonyme, arrivent dans le salon.
-7. Présentez la **sécurité** (`docs/securite-urgence.md`) et le **résumé des règles**, puis **Démarrer la partie**.
+7. Demandez à chacun de régler ses **alertes** (carte du salon), touchez **Faire sonner tous les téléphones**, présentez la **sécurité** (`docs/securite-urgence.md`) et le **résumé des règles**, puis **Démarrer la partie**. Annoncez aussi les réunions à voix haute.
 
 Tout est détaillé dans le [guide du maître du jeu](docs/guide-maitre-du-jeu.md) et les [checklists](docs/checklists.md).
 
@@ -37,6 +39,8 @@ Tout est détaillé dans le [guide du maître du jeu](docs/guide-maitre-du-jeu.m
 | MJ | [Guide du maître du jeu](docs/guide-maitre-du-jeu.md) | [PDF](docs/pdf/guide-maitre-du-jeu.pdf) |
 | MJ | [Installer la maison](docs/installation-terrain.md) | [PDF](docs/pdf/installation-terrain.pdf) |
 | MJ | [Checklists avant / pendant / après](docs/checklists.md) | [PDF](docs/pdf/checklists.pdf) |
+| Tous | [Alertes, sons et notifications : fonctionnement et conseils](docs/alertes-notifications.md) | [PDF](docs/pdf/alertes-notifications.pdf) |
+| MJ | [Mécaniques du jeu vidéo impossibles en vrai, et ce qui les remplace](docs/limites-mecaniques.md) | [PDF](docs/pdf/limites-mecaniques.pdf) |
 | MJ | [Tâches et supports imprimables](docs/taches-et-supports.md) | [PDF](docs/pdf/taches-et-supports.pdf) · [exemple de fiches](docs/pdf/exemple-supports-imprimables.pdf) |
 | Curieux | [Recherche des règles officielles + matrice d’adaptation](docs/recherche-regles.md) | [PDF](docs/pdf/recherche-regles.pdf) |
 | Technique | [Conception (architecture, sécurité, quotas)](docs/conception.md) | [PDF](docs/pdf/conception.pdf) |
@@ -114,7 +118,8 @@ npm run dev:client             # interface Vite sur http://localhost:5173 (termi
 ### Tests
 ```bash
 npm run typecheck          # TypeScript strict (client + serveur)
-npm test                   # 50 tests unitaires du moteur de règles
+npm test                   # tests unitaires + simulation aléatoire de centaines de parties (SIM_GAMES=300 pour plus)
+npx vitest run --coverage  # idem avec mesure de couverture du moteur
 npm run test:integration   # serveur local réel + 40 téléphones simulés (WebSocket)
 npm run test:browser       # Chromium : parcours complet sur écrans de téléphone (nécessite Playwright)
 npm run docs:pdf           # régénère les PDF de docs/pdf (nécessite Playwright)
@@ -124,7 +129,7 @@ npm run docs:pdf           # régénère les PDF de docs/pdf (nécessite Playwri
 ```
 src/shared/       moteur de règles pur (engine.ts), vues filtrées (view.ts), terrain, mini-jeux, paramètres
 src/worker/       Worker Cloudflare (index.ts) et Durable Object d'une partie (game-room.ts)
-src/client/       application mobile Preact : joueur (player.tsx), MJ (gm.tsx), terrain, impression, mini-jeux
+src/client/       application mobile Preact : joueur (player.tsx), MJ (gm.tsx, gm-tests.tsx), alertes et notifications (alerts*.ts[x]), terrain, impression, mini-jeux, entraînement
 public/           manifeste PWA, service worker, icônes
 test/             unitaires, intégration (wrangler dev), navigateur (Playwright)
 docs/             règles, guides, recherche, conception, tests, PDF, captures d'écran
@@ -135,5 +140,5 @@ wrangler.jsonc    configuration Cloudflare (Durable Object SQLite, fichiers stat
 ### Principes
 - Le serveur (Durable Object) est la seule source de vérité ; le navigateur n’envoie que des intentions, toutes vérifiées.
 - Chaque appareil ne reçoit que ce qu’il a le droit de savoir (rôles, codes de postes, réponses, votes et journal secret restent sur le serveur).
-- Dépendances d’exécution : `preact`, `qrcode`, `jsqr` (chargé seulement à l’ouverture de la caméra), `marked`.
+- Dépendances d’exécution : `preact`, `qrcode`, `jsqr` (chargé seulement à l’ouverture de la caméra), `marked`. Notifications push sans bibliothèque : WebCrypto (`src/shared/webpush.ts`, vérifié avec le vecteur officiel de la RFC 8291).
 - Variables d’environnement : aucune pour fonctionner (voir `.env.example` pour le déploiement automatique).

@@ -53,6 +53,8 @@ export class Connection<V extends PlayerView | GmView> {
   };
 
   private onVisible = () => {
+    // le serveur préfère une notification push quand l'application n'est pas au premier plan
+    if (this.ws?.readyState === 1) this.raw({ t: 'vis', visible: document.visibilityState === 'visible' });
     if (document.visibilityState === 'visible') {
       // au retour de veille, on vérifie immédiatement la connexion
       if (Date.now() - this.store.get().lastMessageAt > 20_000) this.reconnectNow();
@@ -133,6 +135,7 @@ export class Connection<V extends PlayerView | GmView> {
         break;
       case 'welcome':
         this.store.update({ status: 'online' });
+        if (document.visibilityState !== 'visible') this.raw({ t: 'vis', visible: false });
         break;
       case 'token':
         this.auth = { kind: 'token', token: msg.token };

@@ -24,6 +24,8 @@ const DOCS = [
   ['installation-terrain', 'Installation de la maison'],
   ['checklists', 'Checklists'],
   ['taches-et-supports', 'Tâches et supports imprimables'],
+  ['alertes-notifications', 'Alertes, sons et notifications'],
+  ['limites-mecaniques', 'Mécaniques impossibles en vrai'],
   ['recherche-regles', 'Recherche et matrice des règles'],
   ['conception', 'Conception technique'],
   ['tests', 'Rapport de tests'],
