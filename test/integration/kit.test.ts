@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { kitSheet, pairSheet } from '../../src/shared/kit';
 import { assembleAnswer, countAnswer } from '../../src/shared/puzzles';
 import { recommendedImpostors } from '../../src/shared/settings';
-import { kitTerrain } from '../../src/shared/terrain';
+import { emptyTerrain } from '../../src/shared/terrain';
 import type { Room, Terrain } from '../../src/shared/types';
 import { createGame, Phone, sleep, startServer, stopServer } from './server';
 
@@ -83,12 +83,14 @@ async function join(name: string) {
 }
 
 describe('kit de fiches universel, contre le vrai serveur', () => {
-  it('le MJ active le kit et appaire 19 fiches dans 10 pièces, chacune enregistrée aussitôt', async () => {
+  it('nouvelle partie sans maison ; le MJ appaire 19 fiches dans 10 pièces, chacune enregistrée aussitôt', async () => {
     const game = await createGame({ settings: { initialKillCooldownSec: 600, killCooldownSec: 600, initialSabotageCooldownSec: 600, autoImpostors: true } });
     gm = await new Phone(game.code).open();
     await gm.hello(game.gmToken);
-    expect((await gm.act({ type: 'terrain', terrain: kitTerrain({ ...kitTerrain(), rooms: ROOMS }) })).ok).toBe(true);
-    await gm.waitState((s) => s.terrain.kit === true);
+    // nouvelle partie : aucune maison par défaut
+    expect(gm.state.terrain).toEqual(emptyTerrain());
+    expect((await gm.act({ type: 'terrain', terrain: { ...emptyTerrain(), rooms: ROOMS } })).ok).toBe(true);
+    await gm.waitState((s) => s.terrain.rooms.length === ROOMS.length);
     const plan: [string, string][] = [
       ['kurg', 'r0'], ['kradio', 'r0'], ['krea1', 'r1'], ['krea2', 'r3'], ['koxy1', 'r2'], ['koxy2', 'r4'], ['kener', 'r5'], ['kvie', 'r6'],
       ['k01', 'r1'], ['k02', 'r2'], ['k03', 'r3'], ['k04', 'r4'], ['k05', 'r5'], ['k06', 'r6'], ['k07', 'r7'], ['k08', 'r8'], ['k09', 'r9'], ['k10', 'r0'], ['k11', 'r7'],

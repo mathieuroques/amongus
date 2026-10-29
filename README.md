@@ -17,11 +17,11 @@ Un site web gratuit pour jouer à un jeu de rôles cachés **inspiré d’Among 
 ## 1. Démarrage express (pour le maître du jeu)
 
 1. **Mettre le site en ligne une fois pour toutes** (section 3 ; 10 minutes, gratuit). Vous obtenez une adresse du type `https://imposteurs.votre-nom.workers.dev`.
-2. Ouvrez cette adresse → **Maître du jeu** → **Créer une nouvelle partie**. Notez le **code maître du jeu** affiché.
-3. Onglet **Terrain** — le plus simple : **Utiliser le kit**. Les fiches du [kit universel](docs/pdf/kit-fiches.pdf) s’impriment une fois pour toutes ; sur place, **📷 Appairer des fiches** : scannez chaque fiche posée et touchez sa pièce, les tâches se répartissent toutes seules (voir [Installer la maison](docs/installation-terrain.md)). Sinon : saisissez vos pièces (cochez *Interdite* ou *Passage* pour les escaliers/couloirs), cliquez **Générer postes et tâches automatiquement**, puis **Enregistrer le terrain**.
-4. Onglet **Paramètres** : choisissez le nombre d’imposteurs (un conseil s’affiche) et **Enregistrer**.
-5. **Imprimer** : imprimez les fiches, collez-les dans les pièces (jamais dans un escalier). Onglet **🧪 Tests** : scannez chaque fiche posée et testez chaque tâche (une coche ✅ par tâche).
-6. Le jour J : affichez l’**affiche d’invitation** (ou partagez le lien). Les joueurs scannent, choisissent un pseudonyme, arrivent dans le salon.
+2. **Imprimer le kit de fiches, une fois pour toutes** : ouvrez cette adresse → **J’organise** → **🖨 Imprimer le kit** (ou le [PDF du dépôt](docs/pdf/kit-fiches.pdf)). Ces fiches servent pour toutes vos parties et toutes les maisons ; il n’y a rien d’autre à imprimer.
+3. **Créer la partie** : **J’organise** → **Créer une nouvelle partie** (aucune maison n’existe d’avance). Notez le **code maître du jeu** affiché.
+4. **Poser et appairer les fiches** : une fiche « Poste » par pièce, le bouton d’urgence dans la salle de réunion ; onglet **Terrain** → **📷 Appairer des fiches** : scannez chaque fiche posée et touchez sa pièce. Les tâches se répartissent toutes seules ; une fiche non appairée n’existe pas pour le jeu (voir [Installer la maison](docs/installation-terrain.md)).
+5. Onglet **Paramètres** : nombre d’imposteurs (ou **Automatique**) ; onglet **🧪 Tests** : scannez chaque fiche posée et testez chaque tâche.
+6. Invitez : montrez le QR code du tableau de bord (ou partagez le lien). Les joueurs scannent, choisissent un pseudonyme, arrivent dans le salon.
 7. Demandez à chacun de régler ses **alertes** (carte du salon), touchez **Faire sonner tous les téléphones**, présentez la **sécurité** (`docs/securite-urgence.md`) et le **résumé des règles**, puis **Démarrer la partie**. Annoncez aussi les réunions à voix haute.
 
 Tout est détaillé dans le [guide du maître du jeu](docs/guide-maitre-du-jeu.md) et les [checklists](docs/checklists.md).
@@ -42,12 +42,12 @@ Tout est détaillé dans le [guide du maître du jeu](docs/guide-maitre-du-jeu.m
 | Tous | [Alertes, sons et notifications : fonctionnement et conseils](docs/alertes-notifications.md) | [PDF](docs/pdf/alertes-notifications.pdf) |
 | MJ | [Mécaniques du jeu vidéo impossibles en vrai, et ce qui les remplace](docs/limites-mecaniques.md) | [PDF](docs/pdf/limites-mecaniques.pdf) |
 | MJ | Kit de fiches universel (imprimé une fois pour toutes) | [PDF](docs/pdf/kit-fiches.pdf) |
-| MJ | [Tâches et supports imprimables](docs/taches-et-supports.md) | [PDF](docs/pdf/taches-et-supports.pdf) · [exemple de fiches](docs/pdf/exemple-supports-imprimables.pdf) |
+| MJ | [Tâches et supports imprimables](docs/taches-et-supports.md) | [PDF](docs/pdf/taches-et-supports.pdf) |
 | Curieux | [Recherche des règles officielles + matrice d’adaptation](docs/recherche-regles.md) | [PDF](docs/pdf/recherche-regles.pdf) |
 | Technique | [Conception (architecture, sécurité, quotas)](docs/conception.md) | [PDF](docs/pdf/conception.pdf) |
 | Technique | [Rapport de tests](docs/tests.md) | [PDF](docs/pdf/tests.pdf) |
 
-Les règles affichées dans l’application (bouton « Règles ») sont **les mêmes fichiers** que ceux de `docs/` : il n’existe qu’une seule version du règlement. Les fiches de postes, étiquettes, badges et l’affiche d’invitation se génèrent depuis le tableau de bord (bouton **Imprimer**), car elles dépendent de votre maison.
+Les règles affichées dans l’application (bouton « Règles ») sont **les mêmes fichiers** que ceux de `docs/` : il n’existe qu’une seule version du règlement. Les fiches, étiquettes, badges et l’affiche d’invitation forment le kit universel, imprimé une fois pour toutes (accueil → **J’organise** → **Imprimer le kit**).
 
 ## 3. Mise en ligne (gratuite)
 
@@ -59,7 +59,7 @@ Il faut **un compte Cloudflare gratuit** — c’est la seule action manuelle in
    - **Project name / Worker name** : `imposteurs` (doit être identique au champ `name` de `wrangler.jsonc`).
    - **Build command** : `npm run build`
    - **Deploy command** : `npx wrangler deploy` (valeur par défaut)
-   - **Branch** : la branche à publier (par exemple `main` après fusion, ou `claude/magical-faraday-0psfzm`).
+   - **Branch** : `main`.
 3. **Save and Deploy**. Après une à deux minutes, l’adresse `https://imposteurs.<votre-sous-domaine>.workers.dev` est affichée. Ouvrez-la sur votre téléphone : c’est prêt.
 4. Chaque nouveau commit sur la branche choisie redéploie automatiquement le site.
 

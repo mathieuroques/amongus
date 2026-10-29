@@ -41,7 +41,7 @@ Téléphones (PWA Preact)  ⇄  WebSocket  ⇄  Worker Cloudflare  →  Durable 
 **Le navigateur n’est jamais cru.** Chaque message est une *intention* ; le serveur vérifie l’identité (jeton aléatoire dont seul le hachage SHA-256 est stocké), l’appartenance à la partie, le rôle, le statut vivant/mort, la phase, les délais, la validité des codes, l’unicité des votes, puis renvoie à chaque appareil **uniquement** ce qu’il a le droit de voir.
 
 ### Kit de fiches universel
-Les 48 fiches du kit (`src/shared/kit.ts`) ont des identifiants, des codes et des énigmes figés, vérifiés par un instantané de test : une fiche imprimée reste valable indéfiniment. Leurs QR codes ne contiennent que le code (pas l’adresse du site). Un terrain « kit » ne stocke que les pièces et l’appairage fiche → pièce ; le serveur impose noms et codes des fiches et **recalcule toujours les tâches** (même calcul que sur le téléphone du MJ, qui l’affiche aussitôt). Une fiche du kit non appairée est refusée avec un message dédié, sans compter comme un code erroné.
+Les 48 fiches du kit (`src/shared/kit.ts`) ont des identifiants, des codes et des énigmes figés, vérifiés par un instantané de test : une fiche imprimée reste valable indéfiniment. Leurs QR codes ne contiennent que le code (pas l’adresse du site). Il n’existe pas d’autres fiches ni de maison par défaut : le terrain ne stocke que les pièces et l’appairage fiche → pièce ; le serveur impose noms et codes des fiches et **recalcule toujours les tâches** (même calcul que sur le téléphone du MJ, qui l’affiche aussitôt). Une fiche du kit non appairée est refusée avec un message dédié, sans compter comme un code erroné.
 
 ### États de partie
 ```

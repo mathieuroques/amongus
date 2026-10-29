@@ -7,7 +7,7 @@ import { checkAnswer, makeFixChallenge, makeTaskChallenge } from './puzzles';
 import { cryptoRng, normalizeCode, randomDigits, shuffle, type Rng } from './rng';
 import { validSubscription } from './webpush';
 import { DEFAULT_SETTINGS, GATHER_MAJORITY_SEC, sanitizeSettings, startSettings } from './settings';
-import { availableSabotages, exampleTerrain, newId, sanitizeTerrain, startProblems } from './terrain';
+import { availableSabotages, emptyTerrain, newId, sanitizeTerrain, startProblems } from './terrain';
 import type {
   ActiveSabotage, Challenge, FixKind, GameState, Meeting, PlayerState, SabotageKind, Settings, Station, Terrain, VoteResult, Winner,
 } from './types';
@@ -42,10 +42,9 @@ const sec = (n: number) => n * 1000;
 export function createGame(code: string, gmTokenHash: string, gmSecretHash: string, now: number, settings?: unknown, terrain?: unknown): GameState {
   let t: Terrain;
   try {
-    t = terrain ? sanitizeTerrain(terrain) : exampleTerrain();
-    if (t.rooms.length === 0) t = exampleTerrain();
+    t = terrain ? sanitizeTerrain(terrain) : emptyTerrain();
   } catch {
-    t = exampleTerrain();
+    t = emptyTerrain();
   }
   return {
     v: 1,
@@ -188,11 +187,11 @@ function registerFailure(s: GameState, p: PlayerState, now: number, what: string
 }
 
 /**
- * Fiche du kit universel qui n'est pas appairée dans cette partie : elle n'existe pas pour le jeu. Message clair,
+ * Fiche du kit qui n'est pas appairée dans cette partie : elle n'existe pas pour le jeu. Message clair,
  * signalé au MJ, sans compter comme un code erroné (le joueur n'y est pour rien).
  */
 function unusedKitSheet(s: GameState, p: PlayerState, code: unknown, now: number) {
-  const k = s.terrain.kit ? kitSheetByCode(normalizeCode(String(code ?? ''))) : undefined;
+  const k = kitSheetByCode(normalizeCode(String(code ?? '')));
   if (!k || s.terrain.stations.some((x) => x.id === k.id)) return;
   log(s, now, 'unused_sheet', `${p.name} a scanné la fiche « ${k.name} », qui n’est pas appairée : retirez-la ou appairez-la.`, true);
   fail('unused_sheet', 'Cette fiche ne sert pas dans cette partie : ignorez-la et prévenez le maître du jeu.');

@@ -4,7 +4,8 @@ import {
 } from '../src/shared/engine';
 import { assemblePuzzle, countPuzzle } from '../src/shared/puzzles';
 import { seededRng } from '../src/shared/rng';
-import { exampleTerrain, sanitizeTerrain } from '../src/shared/terrain';
+import { sanitizeTerrain } from '../src/shared/terrain';
+import { exampleTerrain } from './fixtures';
 import type { GameState, PlayerState } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
@@ -934,7 +935,7 @@ describe('maître du jeu', () => {
 
   it('terrain : validation des données envoyées par le navigateur', () => {
     const t = exampleTerrain(seededRng(1));
-    const bad = { ...t, stations: [...t.stations, { id: 'sx', name: 'X', roomId: 'inexistant', kind: 'task', code: 'AAAA' }] };
+    const bad = { ...t, stations: [...t.stations, { id: 'k30', name: 'X', roomId: 'inexistant', kind: 'task', code: 'AAAA' }] };
     expect(() => sanitizeTerrain(bad)).toThrow();
     const ok = sanitizeTerrain(JSON.parse(JSON.stringify(t)));
     expect(ok.stations.map((x) => x.code)).toEqual(t.stations.map((x) => x.code));

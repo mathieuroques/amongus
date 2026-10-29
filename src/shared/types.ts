@@ -85,8 +85,6 @@ export interface Terrain {
   meetingRoomId: string;
   /** Consignes de sécurité affichées à tous avant le démarrage (sorties, escaliers, zones interdites…). */
   safetyNotes: string;
-  /** Terrain du kit de fiches universel (kit.ts) : fiches fixes appairées aux pièces, tâches calculées automatiquement. */
-  kit?: boolean;
 }
 
 export interface Settings {

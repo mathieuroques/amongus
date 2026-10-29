@@ -2,19 +2,17 @@
 
 ## Quelques jours avant
 - [ ] Site en ligne et testé (voir README) ; lien noté.
-- [ ] Partie créée, **code maître du jeu noté** sur papier.
-- [ ] Pièces, postes, tâches et consignes de sécurité saisis et **enregistrés**.
-- [ ] Terrain **exporté** (fichier de sauvegarde).
-- [ ] Fiches, étiquettes, panneaux, badges et affiche d’invitation imprimés (fiches « puzzle » imprimées avec la version actuelle : bandes à deux lettres, haut et bas).
+- [ ] Kit de fiches imprimé (une fois pour toutes ; accueil → « J’organise » → « Imprimer le kit »).
 - [ ] Message aux invités : charger leur téléphone, venir avec un navigateur à jour, partager le Wi-Fi.
 
 ## Le jour J, avant l’arrivée des joueurs
-- [ ] Fiches posées (aucune dans un escalier ; « Énergie » loin du vrai tableau électrique).
-- [ ] Kit de fiches : chaque fiche posée **appairée** (onglet Terrain → « Appairer des fiches »), postes 01 à 05 préparés (grilles, bandes découpées, croix au sol), fiches non posées rangées.
+- [ ] Partie créée, **code maître du jeu noté** sur papier.
+- [ ] Fiches posées (aucune dans un escalier ; « Énergie » loin du vrai tableau électrique ; réacteurs éloignés, oxygènes éloignés) ; postes 01 à 05 préparés (bandes découpées, croix au sol) ; fiches non posées rangées.
+- [ ] Chaque fiche posée **appairée** (onglet Terrain → « Appairer des fiches ») ; escaliers et zones interdites ajoutés ; consignes de sécurité relues.
 - [ ] Zones interdites signalées ; sorties et escaliers dégagés ; lumières allumées.
 - [ ] Chaque QR code vérifié (onglet 🧪 Tests → « Vérifier une fiche posée »).
 - [ ] Toutes les tâches et réparations testées (onglet 🧪 Tests : « x/y vérifiés »).
-- [ ] Affiche d’invitation à l’entrée ; Wi-Fi des invités disponible.
+- [ ] QR code d’invitation affiché (tableau de bord, ou affiche du kit avec le code écrit à la main) ; Wi-Fi des invités disponible.
 - [ ] Téléphone du MJ chargé (+ batterie externe) ; tableau de bord ouvert.
 
 ## Juste avant de démarrer

@@ -5,6 +5,7 @@ import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assembleAnswer, countAnswer } from '../../src/shared/puzzles';
+import { exampleTerrain } from '../fixtures';
 import { BASE, Phone, sleep, startServer, stopServer } from '../integration/server';
 import { browserFilming } from './camera';
 
@@ -243,6 +244,10 @@ describe('interface sur téléphone', () => {
     const token = await gmPage.evaluate(() => JSON.parse(localStorage.getItem('imposteurs.gm')!).token);
     gmWs = await new Phone(code).open();
     await gmWs.hello(token);
+    // nouvelle partie : aucune maison ; on installe la maison d'exemple (fiches du kit déjà appairées)
+    expect(gmWs.state.terrain.stations).toEqual([]);
+    expect((await gmWs.act({ type: 'terrain', terrain: exampleTerrain() })).ok).toBe(true);
+    await gmWs.waitState((s) => s.terrain.stations.length > 0);
 
     for (const name of ['Alice', 'Bilal', 'Chloé', 'Dmitri', 'Emma']) {
       const ctx = await browser.newContext({ ...devices['iPhone 13'] });
@@ -681,15 +686,6 @@ describe('interface sur téléphone', () => {
     await shot(victim.page, '30-corps-360');
     for (const { ctx } of small) await ctx.close();
   }, 90_000);
-
-  it('supports imprimables : génération du PDF d’exemple', async () => {
-    await gmPage.goto(`${BASE}/#/print`);
-    await byText(gmPage, 'Rejoignez la partie').waitFor();
-    await gmPage.waitForTimeout(800);
-    await gmPage.emulateMedia({ media: 'print' });
-    await gmPage.pdf({ path: new URL('../../docs/pdf/exemple-supports-imprimables.pdf', import.meta.url).pathname, format: 'A4', printBackground: true });
-    await gmPage.emulateMedia({ media: 'screen' });
-  }, 60_000);
 
   it('aucune erreur JavaScript sur aucune page pendant tout le test', () => {
     expect(pageErrors).toEqual([]);

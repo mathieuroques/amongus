@@ -105,8 +105,8 @@ export function GmTests({ v, conn }: { v: GmView; conn: Conn }) {
             const c = normalizeCode(raw);
             const s = v.terrain.stations.find((x) => x.code === c);
             if (!s) {
-              const k = v.terrain.kit ? kitSheetByCode(c) : undefined;
-              toast(k ? `${k.name} n’est pas appairée : onglet Terrain → « Appairer des fiches ».` : `Code ${c} inconnu : cette fiche ne correspond pas au terrain enregistré (réimprimez-la).`, 'err');
+              const k = kitSheetByCode(c);
+              toast(k ? `${k.name} n’est pas appairée : onglet Terrain → « Appairer des fiches ».` : `Code ${c} inconnu : ce n’est pas une fiche du kit.`, 'err');
               return false;
             }
             setScanned(s);

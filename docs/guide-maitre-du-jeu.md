@@ -2,24 +2,23 @@
 
 Le MJ ne joue pas : il prépare, présente la sécurité, surveille et arbitre. Son tableau de bord fonctionne sur téléphone comme sur ordinateur.
 
-## 1. Créer la partie
-1. Ouvrez le site → **Maître du jeu** → **Créer une nouvelle partie**.
+## 1. Imprimer le kit de fiches (une seule fois)
+Accueil → **J’organise** → **🖨 Imprimer le kit** (ou le [PDF du dépôt](pdf/kit-fiches.pdf)) : 40 fiches « Poste », 8 fiches spéciales, étiquettes, panneaux, badges fantômes, aide-mémoire et affiche d’invitation. Ces fiches servent pour toutes vos parties et toutes les maisons : gardez-les. Il n’existe pas d’autres fiches à imprimer.
+
+## 2. Créer la partie
+1. Accueil → **J’organise** → **Créer une nouvelle partie**. Aucune maison n’est créée d’avance : vous la décrivez en appairant les fiches.
 2. Notez le **code maître du jeu** (ex. `ABCD-EFGH`) affiché dans l’onglet Partie : il permet de reprendre le tableau de bord depuis un autre appareil (« Reprendre une partie sur cet appareil »). Ne le montrez à personne.
-3. Le terrain et les paramètres enregistrés sur votre appareil sont réutilisés automatiquement.
+3. Les paramètres enregistrés sur votre appareil sont réutilisés. Si vous rejouez dans la même maison avec les fiches aux mêmes endroits, l’onglet Terrain propose **Reprendre cette maison**.
 
-## 2. Préparer le terrain (onglet Terrain)
-- **Pièces** : nom, étage, *Interdite*, *Passage* (escalier/couloir : pas de poste, pas d’élimination), *Cachette* autorisée, notes.
-- **Générer postes et tâches automatiquement** : crée un poste de tâches par pièce jouable, le bouton d’urgence dans la salle de réunion, 2 postes Réacteur, 2 postes Oxygène, Énergie, Radio, Moniteur de vie, et 15 tâches. Vous pouvez tout modifier ensuite.
-- **Kit de fiches universel (conseillé)** : **Utiliser le kit**, puis **📷 Appairer des fiches** : scannez chaque fiche posée et touchez sa pièce. Fiches imprimées une fois pour toutes ([PDF](pdf/kit-fiches.pdf)) ; une fiche non appairée n’existe pas pour le jeu ; les tâches se répartissent toutes seules et se recalculent à chaque changement, entre deux manches comme pendant la préparation (détails dans [Installer la maison](installation-terrain.md)).
-- **Postes** : nom, pièce, type ; chaque poste a un code imprimé. « ↻ » change le code (il faut alors réimprimer la fiche).
-- **Tâches** : nom, type (commune / longue / courte), active ou non, étapes (poste + mini-jeu). Une tâche longue doit avoir ses étapes dans des pièces différentes.
-- **Conduits** (facultatif, aucun par défaut) : itinéraires sûrs réservés aux imposteurs. Ne les activez que si la maison offre un second chemin éclairé et sans marche.
-- **Consignes de sécurité** : texte affiché à tous dans le salon.
-- **Enregistrer le terrain** : il est aussi mémorisé sur votre appareil ; **Exporter** crée un fichier de sauvegarde, **Importer** le recharge.
+## 2 bis. Poser et appairer les fiches (onglet Terrain)
+- **Poser** : une fiche « Poste » par pièce jouable (deux dans une grande pièce si besoin), jamais dans un escalier ; le bouton d’urgence dans la salle de réunion ; Réacteur A loin de Réacteur B, Oxygène A loin d’Oxygène B ; Énergie loin du vrai tableau électrique. Les postes 01 à 05 portent les énigmes papier et le scan médical (croix au sol devant le poste 05).
+- **📷 Appairer des fiches** : visez une fiche (ou tapez son code), puis touchez sa pièce, ou tapez le nom d’une nouvelle pièce. C’est enregistré aussitôt ; la salle de réunion suit le bouton d’urgence. Une fiche non appairée n’existe pas pour le jeu : si un joueur la scanne, il lit « Cette fiche ne sert pas dans cette partie » et vous êtes averti.
+- **Tâches** : réparties toutes seules sur les fiches appairées, recalculées à chaque changement (chaque fiche posée en a au moins une ; une tâche dont la fiche attitrée n’est pas posée n’existe pas). La liste est consultable dans l’onglet.
+- **Pièces et zones** : nom, étage, *Interdite*, *Passage* (escalier, couloir : ni fiche ni élimination), *Cachette* autorisée, notes. Ajoutez les escaliers et zones interdites avec **+ Zone**.
+- **Réunion et sécurité** : salle de réunion, consignes de sécurité affichées à tous dans le salon.
+- **Conduits** (facultatif, aucun par défaut) : itinéraires sûrs réservés aux imposteurs, seulement si la maison offre un second chemin éclairé et sans marche.
 
-Le terrain et les paramètres ne se modifient que dans le salon (pas pendant une manche).
-
-Des **conseils** s’affichent (poste sans tâche, pièce sans poste, tâche longue dont les deux étapes sont dans la même pièce, sabotages désactivés faute de postes).
+Le terrain ne se modifie que dans le salon : entre deux manches, touchez « Nouvelle manche » puis ajoutez, déplacez ou retirez des fiches. Des **conseils** s’affichent (pièce sans fiche, sabotage désactivé faute de fiche, fiches Réacteur ou Oxygène dans la même pièce).
 
 ## 3. Paramètres (onglet Paramètres)
 Trois **préréglages** en un geste : *Petit groupe (≤ 12)*, *Groupe moyen (13–24)*, *Grande partie (25–40)* ; le nombre d’imposteurs est ajusté au nombre d’inscrits (bouton « Appliquer le conseil »).
@@ -32,12 +31,7 @@ Nombre d’imposteurs (conseil affiché selon le nombre de joueurs ; ils doivent
 | 13–20 | 3–4 | 60 s | 120 s / 90 s |
 | 21–30 | 4–5 | 75 s | 120 s / 120 s |
 | 31–40 | 5–6 | 90 s | 150 s / 120 s |
-Prévoyez au moins 1,5 poste de tâches par tranche de 4 joueurs pour éviter les embouteillages.
-
-## 4. Imprimer (bouton Imprimer)
-Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papier), fiches spéciales (bouton d’urgence, réacteur, oxygène, énergie, radio, moniteur), étiquettes des pièces et panneaux « zone interdite » / « passage », badges fantômes, aide-mémoire. « Imprimer » → imprimante ou « Enregistrer en PDF ». Avec le kit, les fiches de postes ne s’impriment pas ici : elles viennent du kit (accueil → « Imprimer le kit de fiches »), sans lien avec la partie. Les codes restent valables d’une partie à l’autre tant que vous ne les régénérez pas.
-
-> **Énigmes papier (mise à jour)** : la grille « inventaire » est inchangée (vos anciennes fiches restent utilisables, la nouvelle impression ajoute seulement les repères A–F / 1–8 et les traits des moitiés), mais les **bandes « puzzle » portent désormais deux lettres** (haut et bas) : **réimprimez et redécoupez** les fiches qui contiennent un puzzle (« Puzzle », « Énigme du coffre »).
+Prévoyez au moins 1,5 fiche « Poste » par tranche de 4 joueurs pour éviter les embouteillages.
 
 ## 4 bis. Tester (onglet 🧪 Tests)
 - **Faire sonner tous les téléphones** : chaque joueur doit entendre/voir l’alerte ; les autres règlent leurs alertes.
@@ -46,10 +40,10 @@ Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papi
 - **Réparations** : énergie, radio, oxygène. Le réacteur se teste à deux, pendant une partie d’essai.
 
 ## 5. Inviter
-Montrez l’**affiche** ou le QR code de l’onglet Partie, ou utilisez **Partager le lien**. Les joueurs saisissent un pseudonyme. Verrouillez le salon une fois tout le monde arrivé. Un retardataire attendra la partie suivante (« Nouvelle partie » rouvre le salon).
+Montrez le QR code de l’onglet Partie (ou l’affiche du kit, avec le code de la partie écrit à la main), ou utilisez **Partager le lien**. Les joueurs saisissent un pseudonyme. Verrouillez le salon une fois tout le monde arrivé. Un retardataire attendra la partie suivante (« Nouvelle partie » rouvre le salon).
 
 ## 6. Démarrer
-L’onglet Partie affiche une **liste de préparation** : terrain, réglages, fiches posées, tâches testées, joueurs connectés et alertes, sécurité présentée.
+L’onglet Partie affiche une **liste de préparation** : fiches posées et appairées, réglages, tâches testées, joueurs connectés et alertes, sécurité présentée.
 1. Faites la **présentation de sécurité** (voir `securite-urgence.md`) et expliquez le résumé des règles.
 2. Demandez à chacun de régler ses alertes et de tester son appareil photo (cartes du salon). Faites sonner tous les téléphones.
 3. **Démarrer la partie** : les rôles sont tirés au hasard et chacun le découvre écran caché.

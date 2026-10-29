@@ -7,7 +7,8 @@ import {
 } from '../src/shared/engine';
 import { seededRng, type Rng } from '../src/shared/rng';
 import { KIT_SHEETS, pairSheet } from '../src/shared/kit';
-import { exampleTerrain, kitTerrain } from '../src/shared/terrain';
+import { emptyTerrain } from '../src/shared/terrain';
+import { exampleTerrain } from './fixtures';
 import type { GameState, SabotageKind, Terrain } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
@@ -272,7 +273,7 @@ describe(`simulation aléatoire du moteur (${GAMES} séries de parties, 4 à 40 
 function kitHouse(seed: number): Terrain {
   const r = seededRng(seed);
   const n = 3 + r.int(28);
-  let t = kitTerrain({ ...kitTerrain(), rooms: Array.from({ length: n }, (_, i) => ({ id: `r${i}`, name: `Salle ${i + 1}`, floor: i % 2 ? 'Étage' : 'RDC', forbidden: false, transit: false, hideAllowed: true, notes: '' })) });
+  let t: Terrain = { ...emptyTerrain(), rooms: Array.from({ length: n }, (_, i) => ({ id: `r${i}`, name: `Salle ${i + 1}`, floor: i % 2 ? 'Étage' : 'RDC', forbidden: false, transit: false, hideAllowed: true, notes: '' })) };
   for (const k of KIT_SHEETS) if (k.kind === 'emergency' || r.int(3) > 0) t = pairSheet(t, k.id, `r${r.int(n)}`);
   return t;
 }

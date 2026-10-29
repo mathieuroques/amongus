@@ -80,9 +80,6 @@ export function GmApp({ conn }: { conn: Conn }) {
               {l}
             </button>
           ))}
-          <a class="btn small" href="#/print">
-            🖨 Imprimer
-          </a>
           <a class="btn small" href="#/regles">
             📖 Règles
           </a>
@@ -216,7 +213,6 @@ function LobbyPanel({ v, conn, goTab }: { v: GmView; conn: Conn; goTab: (t: Tab)
   const problems = startProblems(v.terrain, settings, players.length);
   const terrainProblems = startProblems(v.terrain, settings, Math.max(players.length, 2 * settings.impostors + 1)).filter((p) => !/joueurs|imposteurs/.test(p));
   const warnings = terrainWarnings(v.terrain);
-  const [printed, setPrinted] = useCheck(`${v.code}.printed`);
   const [safety, setSafety] = useCheck(`${v.code}.${v.gameNumber}.safety`);
   const tested = testedCount(v);
   const secret = sessions.gm()?.secret;
@@ -236,16 +232,20 @@ function LobbyPanel({ v, conn, goTab }: { v: GmView; conn: Conn; goTab: (t: Tab)
         <h2 style={{ margin: 0 }}>Préparer la partie</h2>
         <ol class="steps">
           <Step ok={terrainProblems.length === 0} n={1}>
-            <strong>Terrain</strong> : {v.terrain.rooms.length} pièces, {v.terrain.stations.length} postes, {v.terrain.tasks.filter((t) => t.enabled).length} tâches.
+            <strong>Fiches posées et appairées</strong> : {v.terrain.stations.length} fiche(s) dans {new Set(v.terrain.stations.map((x) => x.roomId)).size} pièce(s), {v.terrain.tasks.length} tâches.{' '}
+            <button class="btn link" onClick={() => goTab('terrain')}>
+              Appairer
+            </button>
             {terrainProblems.map((p) => (
               <div key={p} class="muted">
                 ⚠️ {p}
               </div>
             ))}
-            {warnings.length > 0 && <div class="muted">{warnings.length} conseil(s) d’amélioration.</div>}{' '}
-            <button class="btn link" onClick={() => goTab('terrain')}>
-              Modifier
-            </button>
+            {terrainProblems.length === 0 && warnings.length > 0 && (
+              <div class="muted">
+                {warnings.length} conseil(s) dans l’onglet Terrain.
+              </div>
+            )}
           </Step>
           <Step ok={settings.impostors <= maxImpostorsFor(players.length) && players.length >= 4} n={2}>
             <strong>Réglages</strong> : {settings.impostors} imposteur(s) {v.settings.autoImpostors ? '(automatique selon le nombre de joueurs)' : `(conseillé pour ${players.length} joueurs : ${rec})`}, élimination toutes les {v.settings.killCooldownSec} s.{' '}
@@ -253,42 +253,19 @@ function LobbyPanel({ v, conn, goTab }: { v: GmView; conn: Conn; goTab: (t: Tab)
               Modifier
             </button>
           </Step>
-          <Step ok={printed} n={3}>
-            {v.terrain.kit ? (
-              <>
-                <strong>Fiches du kit posées et appairées</strong> : {v.terrain.stations.length} fiche(s).{' '}
-                <button class="btn link" onClick={() => goTab('terrain')}>
-                  Appairer
-                </button>{' '}
-                <a class="btn link" href="#/kit">
-                  Imprimer le kit
-                </a>
-              </>
-            ) : (
-              <>
-                <strong>Fiches imprimées et posées</strong>{' '}
-                <a class="btn link" href="#/print">
-                  Imprimer
-                </a>
-              </>
-            )}
-            <label class="check">
-              <input type="checkbox" checked={printed} onChange={(e) => setPrinted((e.target as HTMLInputElement).checked)} /> c’est fait
-            </label>
-          </Step>
-          <Step ok={tested.done >= tested.total && tested.total > 0} n={4}>
+          <Step ok={tested.done >= tested.total && tested.total > 0} n={3}>
             <strong>Tâches testées</strong> : {tested.done}/{tested.total}{' '}
             <button class="btn link" onClick={() => goTab('tests')}>
               Tester
             </button>
           </Step>
-          <Step ok={players.length >= 4 && connected === players.length} n={5}>
+          <Step ok={players.length >= 4 && connected === players.length} n={4}>
             <strong>Joueurs</strong> : {players.length} inscrits, {connected} connectés, {pushCount} avec notifications.{' '}
             <ActButton class="small" run={() => conn.act({ type: 'ping' })} okMsg="Les téléphones des joueurs sonnent.">
               🔔 Faire sonner
             </ActButton>
           </Step>
-          <Step ok={safety} n={6}>
+          <Step ok={safety} n={5}>
             <strong>Sécurité présentée</strong> (zones interdites, escaliers, sorties, on ne court pas, STOP)
             <label class="check">
               <input type="checkbox" checked={safety} onChange={(e) => setSafety((e.target as HTMLInputElement).checked)} /> c’est fait
@@ -748,7 +725,7 @@ function SettingsTab({ v, conn }: { v: GmView; conn: Conn }) {
         ))}
       </div>
       {editable && (
-        <div class="card row" style={{ position: 'sticky', bottom: '8px', zIndex: 5 }}>
+        <div class="card row save-bar">
           <ActButton
             class="primary"
             disabled={!dirty}

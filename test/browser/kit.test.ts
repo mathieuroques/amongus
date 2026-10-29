@@ -43,7 +43,9 @@ describe('kit de fiches universel (navigateur)', () => {
     const page = await (await b.newContext({ viewport: { width: 1200, height: 900 } })).newPage();
     watch(page, 'Kit');
     await page.goto(`${BASE}/`);
-    await page.getByRole('link', { name: /Imprimer le kit de fiches/ }).click();
+    // accueil → « J’organise » : étape 1 de la préparation
+    await page.getByRole('button', { name: /J’organise/ }).click();
+    await page.getByRole('link', { name: /Imprimer le kit/ }).click();
     await page.getByText('Mode d’emploi du maître du jeu').first().waitFor();
     const root = page.locator('.printroot');
     // guide (1) + 40 postes + 8 spéciales + 12 étiquettes + 3 interdites + 3 passages + 2 pages de badges + aide-mémoire + affiche
@@ -84,8 +86,7 @@ describe('kit de fiches universel (navigateur)', () => {
     gmWs = await new Phone(code).open();
     await gmWs.hello(await gm.evaluate(() => JSON.parse(localStorage.getItem('imposteurs.gm')!).token));
     await gm.getByRole('button', { name: /Terrain/ }).first().click();
-    await gm.getByRole('button', { name: 'Utiliser le kit' }).click();
-    await gmWs.waitState((s) => s.terrain.kit === true);
+    expect(gmWs.state.terrain.rooms).toEqual([]);
     await gm.getByRole('button', { name: /Appairer des fiches/ }).click();
     // la caméra simulée filme la fiche « Poste 07 »
     await gm.getByText('Pas encore appairée').first().waitFor({ timeout: 20_000 });
@@ -120,8 +121,8 @@ describe('kit de fiches universel (navigateur)', () => {
     expect(t.rooms.map((r: any) => r.name).sort()).toEqual(['Bureau', 'Cuisine', 'Grenier', 'Salon']);
     expect(t.meetingRoomId).toBe(t.rooms.find((r: any) => r.name === 'Salon').id);
     // la liste par pièce et le résumé des tâches sont à jour
-    await gm.getByText(/Fiches du kit posées : 8\/48/).waitFor();
-    await gm.getByText(new RegExp(`Tâches \\(${t.tasks.length}, réparties automatiquement\\)`)).waitFor();
+    await gm.getByText(/Fiches posées : 8\/48/).waitFor();
+    await gm.locator('summary', { hasText: 'Tâches, réparties automatiquement' }).getByText(String(t.tasks.length)).waitFor();
     // retrait d'une fiche par la liste
     await gm.getByRole('button', { name: 'Retirer Poste 02 du jeu' }).click();
     await gmWs.waitState((s) => !s.terrain.stations.some((x: any) => x.id === 'k02'));
@@ -152,4 +153,28 @@ describe('kit de fiches universel (navigateur)', () => {
     expect(me.blockedUntil ?? 0).toBe(0);
     expect(errors).toEqual([]);
   }, 120_000);
+
+  it('nouvelle partie sur le même téléphone : aucune maison d’office, « Reprendre cette maison » remet les mêmes fiches', async () => {
+    const before = gmWs.state.terrain;
+    await gm.goto(`${BASE}/`);
+    await gm.getByRole('button', { name: /J’organise/ }).click();
+    await gm.getByRole('button', { name: /Créer une nouvelle partie/ }).click();
+    await gm.waitForURL(/#\/gm/);
+    await gm.waitForFunction((c: string) => !document.body.innerText.includes(c), code);
+    const code2 = (await gm.locator('.big-code').first().textContent()).trim();
+    expect(code2).not.toBe(code);
+    const ws = await new Phone(code2).open();
+    await ws.hello(await gm.evaluate(() => JSON.parse(localStorage.getItem('imposteurs.gm')!).token));
+    expect(ws.state.terrain.stations).toEqual([]);
+    expect(ws.state.terrain.rooms).toEqual([]);
+    await gm.getByRole('button', { name: /Terrain/ }).first().click();
+    await gm.getByText('Même maison que la dernière fois ?').waitFor();
+    await gm.getByRole('button', { name: 'Reprendre cette maison' }).click();
+    const s = await ws.waitState((x) => x.terrain.stations.length > 0);
+    expect(s.terrain.stations).toEqual(before.stations);
+    expect(s.terrain.rooms).toEqual(before.rooms);
+    await gm.getByText('Même maison que la dernière fois ?').waitFor({ state: 'detached' });
+    ws.close();
+    expect(errors).toEqual([]);
+  }, 60_000);
 });

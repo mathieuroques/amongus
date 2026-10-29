@@ -33,14 +33,13 @@ export function KitPrintPage() {
     <div>
       <div class="wrap noprint stack">
         <div class="row">
-          <a class="btn small" href="#/">
-            ← Accueil
-          </a>
+          <button class="btn small" onClick={() => (history.length > 1 ? history.back() : (location.hash = '#/'))}>
+            ← Retour
+          </button>
           <h1 class="grow">Kit de fiches universel</h1>
         </div>
         <p>
-          Ces fiches servent <strong>pour toutes vos parties, dans n’importe quelle maison</strong> : imprimez-les une fois, gardez-les. Sur place, le maître du jeu appaire chaque fiche posée avec sa pièce (onglet Terrain → « Appairer des fiches ») ; une fiche
-          non posée n’existe pas pour le jeu.
+          Ces fiches servent <strong>pour toutes vos parties, dans n’importe quelle maison</strong> : imprimez-les une fois, gardez-les. Sur place, le maître du jeu appaire chaque fiche posée avec sa pièce ; une fiche non posée n’existe pas pour le jeu.
         </p>
         {(Object.keys(SECTIONS) as Section[]).map((k) => (
           <label class="check" key={k}>
@@ -58,8 +57,8 @@ export function KitPrintPage() {
       </div>
       <div class="printroot">
         {on.guide && <KitGuide />}
-        {on.stations && posts.map((k) => <StationSheet key={k.id} name={k.name} code={k.code} qr={k.code} extras={kitSheetExtras(k.id)} />)}
-        {on.special && KIT_SHEETS.filter((k) => k.kind !== 'task').map((k) => <SpecialSheet key={k.id} name={k.name} kind={k.kind} code={k.code} qr={k.code} />)}
+        {on.stations && posts.map((k) => <StationSheet key={k.id} name={k.name} code={k.code} extras={kitSheetExtras(k.id)} />)}
+        {on.special && KIT_SHEETS.filter((k) => k.kind !== 'task').map((k) => <SpecialSheet key={k.id} name={k.name} kind={k.kind} code={k.code} />)}
         {on.rooms && <BlankRoomSheets labels={12} forbidden={3} transit={3} />}
         {on.ghosts && (
           <>
@@ -87,8 +86,7 @@ function KitGuide() {
           ; Énergie loin du vrai tableau électrique. Préparez les postes 01 à 05 (colonne « À préparer »).
         </li>
         <li>
-          <strong>Appairer</strong> : tableau de bord du MJ → onglet Terrain → « Utiliser le kit » (une seule fois) → « 📷 Appairer des fiches ». Scannez chaque fiche posée et touchez sa pièce (ou créez-la). Les tâches se répartissent toutes seules sur les
-          fiches appairées.
+          <strong>Appairer</strong> : créez la partie (accueil → « J’organise »), puis onglet Terrain → « 📷 Appairer des fiches ». Scannez chaque fiche posée et touchez sa pièce (ou créez-la). Les tâches se répartissent toutes seules sur les fiches appairées.
         </li>
         <li>
           <strong>Vérifier</strong> : onglet 🧪 Tests, scannez chaque fiche (l’application affiche sa pièce) et testez les tâches.

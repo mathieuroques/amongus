@@ -1,6 +1,7 @@
 // Tests d'intégration client ↔ serveur : vrais WebSockets contre le Worker + Durable Object exécutés localement.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assembleAnswer, countAnswer } from '../../src/shared/puzzles';
+import { exampleTerrain } from '../fixtures';
 import { BASE, createGame, Phone, sleep, startServer, stopServer } from './server';
 
 const N = 40;
@@ -73,7 +74,7 @@ afterAll(async () => {
 
 describe('parcours complet multi-téléphones', () => {
   it('1. crée une partie avec un code court', async () => {
-    game = await createGame({ settings: SETTINGS });
+    game = await createGame({ settings: SETTINGS, terrain: exampleTerrain() });
     expect(game.code).toMatch(/^[BCDFGHJKMNPQRSTVWXZ2-9]{6}$/);
     expect(game.gmSecret).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     const info = await (await fetch(`${BASE}/api/games/${game.code}/info`)).json();

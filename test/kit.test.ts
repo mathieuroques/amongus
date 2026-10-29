@@ -6,8 +6,8 @@ import { addPlayer, createGame, gmAction, GameError, playerAction } from '../src
 import { KIT_SHEETS, KIT_TASK_SHEETS, KIT_TASKS, kitSheet, kitSheetByCode, kitSheetExtras, kitTasks, pairSheet } from '../src/shared/kit';
 import { CODE_ALPHABET, normalizeCode, seededRng, type Rng } from '../src/shared/rng';
 import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors, sanitizeSettings, startSettings } from '../src/shared/settings';
-import { availableSabotages, exampleTerrain, kitTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
-import type { Room, Settings } from '../src/shared/types';
+import { availableSabotages, emptyTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
+import type { Room, Settings, Terrain } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -23,7 +23,7 @@ const POSTS = KIT_SHEETS.filter((k) => k.kind === 'task');
 /** Une maison au hasard (pièces jouables, escalier, zone interdite) et une pose au hasard d'une partie des fiches. */
 function randomInstall(r: Rng, opts: { withSpecials?: boolean } = {}) {
   const nRooms = 1 + r.int(30);
-  let t = kitTerrain({ ...kitTerrain(), rooms: [...Array.from({ length: nRooms }, (_, i) => room(`r${i}`, `Pièce réelle ${i + 1}`, { floor: i % 2 ? 'Étage' : 'RDC' })), room('rstairs', 'Escalier', { transit: true }), room('rno', 'Parents', { forbidden: true })] });
+  let t: Terrain = { ...emptyTerrain(), rooms: [...Array.from({ length: nRooms }, (_, i) => room(`r${i}`, `Pièce réelle ${i + 1}`, { floor: i % 2 ? 'Étage' : 'RDC' })), room('rstairs', 'Escalier', { transit: true }), room('rno', 'Parents', { forbidden: true })] };
   const posts = POSTS.filter(() => r.int(3) > 0).slice(0, 1 + r.int(KIT_TASK_SHEETS));
   for (const k of posts.length ? posts : [POSTS[r.int(POSTS.length)]]) t = pairSheet(t, k.id, `r${r.int(nRooms)}`);
   if (opts.withSpecials !== false) for (const k of SPECIALS) if (k.kind === 'emergency' || r.int(4) > 0) t = pairSheet(t, k.id, `r${r.int(nRooms)}`);
@@ -100,7 +100,7 @@ describe('kit : appairage et tâches', () => {
   }, 120_000);
 
   it('toutes les fiches posées, une par pièce : chacune a exactement une tâche, aucun conseil', () => {
-    let t = kitTerrain({ ...kitTerrain(), rooms: Array.from({ length: 48 }, (_, i) => room(`r${i}`, `Salle ${i + 1}`)) });
+    let t: Terrain = { ...emptyTerrain(), rooms: Array.from({ length: 48 }, (_, i) => room(`r${i}`, `Salle ${i + 1}`)) };
     KIT_SHEETS.forEach((k, i) => (t = pairSheet(t, k.id, `r${i}`)));
     for (const s of t.stations.filter((x) => x.kind === 'task')) expect(t.tasks.flatMap((k) => k.steps).filter((st) => st.stationId === s.id)).toHaveLength(1);
     expect(availableSabotages(t)).toEqual(['reactor', 'oxygen', 'lights', 'comms']);
@@ -108,28 +108,30 @@ describe('kit : appairage et tâches', () => {
     expect(t.tasks).toHaveLength(KIT_TASKS.length);
   });
 
-  it('activer le kit : les pièces de votre terrain sont gardées, celles de la maison d’exemple non', () => {
-    expect(kitTerrain(exampleTerrain()).rooms).toEqual([]);
-    expect(kitTerrain(exampleTerrain()).name).toBe('Ma maison');
-    const mine = { ...exampleTerrain(), name: 'Chalet', rooms: [room('a', 'Salon'), room('b', 'Cuisine')], meetingRoomId: 'b' };
-    expect(kitTerrain(mine)).toMatchObject({ name: 'Chalet', rooms: mine.rooms, meetingRoomId: 'b', stations: [], tasks: [], kit: true });
-    expect(sanitizeTerrain(clone(kitTerrain(mine)))).toEqual(kitTerrain(mine));
+  it('nouvelle partie : aucune maison par défaut, même avec un terrain reçu illisible', () => {
+    for (const terrain of [undefined, null, 'x', { rooms: 'x' }, { rooms: [{ id: 'a' }, { id: 'a' }] }]) {
+      const s = createGame('BCDFGH', 'gm', 'sec', 1000, {}, terrain);
+      expect(s.terrain).toEqual(emptyTerrain());
+    }
+    // une maison reçue (« Reprendre cette maison ») : seules les fiches du kit sont gardées
+    const s = createGame('BCDFGH', 'gm', 'sec', 1000, {}, { rooms: [room('a', 'Salon')], stations: [{ id: 'kurg', roomId: 'a' }, { id: 'perso', roomId: 'a', code: 'ZZZZ' }] });
+    expect(s.terrain.stations.map((x) => x.id)).toEqual(['kurg']);
   });
 
   it('ce qui manque est dit clairement', () => {
-    const empty = kitTerrain();
+    const empty = emptyTerrain();
     const p = startProblems(empty, DEFAULT_SETTINGS, 10);
     expect(p).toContain('Appairez au moins une fiche « Poste » (onglet Terrain).');
     expect(p).toContain('Appairez la fiche « Bouton d’urgence » (onglet Terrain).');
-    let t = kitTerrain({ ...empty, rooms: [room('a', 'Salon'), room('b', 'Cuisine')] });
+    let t: Terrain = { ...empty, rooms: [room('a', 'Salon'), room('b', 'Cuisine')] };
     t = pairSheet(pairSheet(pairSheet(t, 'kurg', 'a'), 'k10', 'b'), 'krea1', 'a');
     t = pairSheet(t, 'krea2', 'a');
     expect(terrainWarnings(t)).toContain('Les fiches Réacteur sont dans la même pièce : le sabotage est trop facile à réparer, éloignez-les.');
-    expect(terrainWarnings(t).some((w) => /Oxygène : le sabotage « Fuite d’oxygène » est désactivé/.test(w))).toBe(true);
+    expect(terrainWarnings(t).some((w) => /Oxygène appairées : le sabotage « Fuite d’oxygène » est désactivé/.test(w))).toBe(true);
   });
 
   it('le serveur impose les fiches du kit : codes et noms non modifiables, doublons ignorés, zones interdites refusées', () => {
-    const base = kitTerrain({ ...kitTerrain(), rooms: [room('a', 'Salon'), room('x', 'Garage', { forbidden: true })] });
+    const base: Terrain = { ...emptyTerrain(), rooms: [room('a', 'Salon'), room('x', 'Garage', { forbidden: true })] };
     const out = sanitizeTerrain({ ...base, stations: [{ id: 'k07', name: 'Triche', code: 'AAAA', kind: 'emergency', roomId: 'a' }, { id: 'k07', roomId: 'a' }, { id: 'inconnue', roomId: 'a' }] });
     expect(out.stations).toEqual([{ id: 'k07', name: 'Poste 07', code: kitSheet('k07')!.code, kind: 'task', roomId: 'a' }]);
     expect(() => sanitizeTerrain({ ...base, stations: [{ id: 'k07', roomId: 'x' }] })).toThrow(/zone interdite/);
@@ -137,7 +139,7 @@ describe('kit : appairage et tâches', () => {
   });
 
   it('la salle de réunion suit le bouton d’urgence, sauf si le MJ en a choisi une autre', () => {
-    let t = kitTerrain({ ...kitTerrain(), rooms: [room('a', 'Salon'), room('b', 'Cuisine'), room('c', 'Bureau')] });
+    let t: Terrain = { ...emptyTerrain(), rooms: [room('a', 'Salon'), room('b', 'Cuisine'), room('c', 'Bureau')] };
     t = pairSheet(t, 'kurg', 'b');
     expect(t.meetingRoomId).toBe('b');
     t = pairSheet(t, 'kurg', 'c');
@@ -149,7 +151,7 @@ describe('kit : appairage et tâches', () => {
 
   it('changer les fiches à la volée : 500 suites d’appairages, déplacements et retraits restent toujours cohérentes', () => {
     const r = seededRng(77);
-    let t = kitTerrain({ ...kitTerrain(), rooms: Array.from({ length: 12 }, (_, i) => room(`r${i}`, `Salle ${i + 1}`)) });
+    let t: Terrain = { ...emptyTerrain(), rooms: Array.from({ length: 12 }, (_, i) => room(`r${i}`, `Salle ${i + 1}`)) };
     for (let i = 0; i < 500; i++) {
       const k = KIT_SHEETS[r.int(KIT_SHEETS.length)];
       t = r.int(4) === 0 ? pairSheet(t, k.id) : pairSheet(t, k.id, `r${r.int(12)}`);
@@ -163,7 +165,7 @@ describe('kit : partie réelle, changements entre deux manches', () => {
   const ctx = (now: number) => ({ now, rng: seededRng(now) });
 
   it('fiche du kit non appairée : message clair, signalée au MJ, jamais comptée comme code erroné', () => {
-    let t = kitTerrain({ ...kitTerrain(), rooms: [room('a', 'Salon'), room('b', 'Cuisine')] });
+    let t: Terrain = { ...emptyTerrain(), rooms: [room('a', 'Salon'), room('b', 'Cuisine')] };
     t = pairSheet(pairSheet(pairSheet(t, 'kurg', 'a'), 'k10', 'a'), 'k11', 'b');
     const s = createGame('BCDFGH', 'gm', 'sec', 1000, { impostors: 1 }, t);
     for (let i = 0; i < 5; i++) addPlayer(s, `J${i}`, `t${i}`, 1000);
@@ -192,7 +194,7 @@ describe('kit : partie réelle, changements entre deux manches', () => {
 
   it('entre deux manches : fiches ajoutées, déplacées, retirées, joueurs qui partent et arrivent, imposteurs automatiques', () => {
     const r = seededRng(5);
-    let t = kitTerrain({ ...kitTerrain(), rooms: Array.from({ length: 15 }, (_, i) => room(`r${i}`, `Salle ${i + 1}`)) });
+    let t: Terrain = { ...emptyTerrain(), rooms: Array.from({ length: 15 }, (_, i) => room(`r${i}`, `Salle ${i + 1}`)) };
     for (const k of KIT_SHEETS.slice(0, 20)) t = pairSheet(t, k.id, `r${r.int(15)}`);
     t = pairSheet(t, 'kurg', 'r0');
     const s = createGame('BCDFGH', 'gm', 'sec', 1000, { autoImpostors: true, impostors: 9 }, t);

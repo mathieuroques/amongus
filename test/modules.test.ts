@@ -9,7 +9,8 @@ import {
 } from '../src/shared/puzzles';
 import { CODE_ALPHABET, cryptoRng, normalizeCode, randomCode, randomDigits, seededRng, sha256, shuffle } from '../src/shared/rng';
 import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors, sanitizeSettings, SETTING_BOUNDS } from '../src/shared/settings';
-import { availableSabotages, EXAMPLE_ROOMS, exampleTerrain, generateTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
+import { availableSabotages, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
+import { exampleTerrain } from './fixtures';
 import type { FixKind, GameKind } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
@@ -188,19 +189,8 @@ describe('terrain', () => {
     expect(availableSabotages(t)).toEqual(['reactor', 'oxygen', 'lights', 'comms']);
     expect(terrainWarnings(t)).toEqual([]);
   });
-  it('génération automatique pour des maisons de 1 à 25 pièces', () => {
-    for (let n = 1; n <= 25; n++) {
-      const rooms = Array.from({ length: n }, (_, i) => ({ name: `Pièce ${i + 1}`, floor: i % 2 ? 'Étage' : 'RDC' }));
-      const t = generateTerrain(rooms, 0, seededRng(n));
-      expect(t.stations.filter((s) => s.kind === 'emergency')).toHaveLength(1);
-      expect(new Set(t.stations.map((s) => s.code)).size).toBe(t.stations.length);
-      expect(() => sanitizeTerrain(JSON.parse(JSON.stringify(t)))).not.toThrow();
-      for (const k of t.tasks) for (const st of k.steps) expect(t.stations.find((s) => s.id === st.stationId)?.kind).toBe('task');
-    }
-    expect(() => generateTerrain([{ name: 'A', forbidden: true }])).toThrow();
-  });
   it('aucun poste dans une zone interdite ou de passage', () => {
-    const t = generateTerrain(EXAMPLE_ROOMS, 0, seededRng(9));
+    const t = exampleTerrain(seededRng(9));
     for (const s of t.stations) {
       const r = t.rooms.find((x) => x.id === s.roomId)!;
       expect(r.forbidden || r.transit).toBe(false);

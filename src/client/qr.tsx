@@ -13,7 +13,3 @@ export function QR({ text, size = 220 }: { text: string; size?: number }) {
 export function joinUrl(code: string) {
   return `${location.origin}/#/j/${code}`;
 }
-
-export function stationUrl(code: string) {
-  return `${location.origin}/#/s/${code}`;
-}

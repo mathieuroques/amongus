@@ -4,7 +4,6 @@ import { gmConn, go, playerConn, startGmConn, startPlayerConn } from './conn';
 import { GmApp } from './gm';
 import { PlayerApp } from './player';
 import { KitPrintPage } from './kit-print';
-import { PrintPage } from './print';
 import { RulesPage } from './rules';
 import { sessions, storageAvailable } from './session';
 import { isIOS, isStandalone } from './alerts';
@@ -34,10 +33,7 @@ export function App() {
   } else if (h === '/gm') {
     const c = gmConn();
     page = c ? <GmApp conn={c} /> : <Home />;
-  } else if (h === '/print') {
-    const c = gmConn();
-    page = c ? <PrintPage conn={c} /> : <Home />;
-  } else if (h === '/kit') {
+  } else if (h === '/kit' || h === '/print') {
     page = <KitPrintPage />;
   } else if (h.startsWith('/regles')) {
     page = <RulesPage />;
@@ -103,9 +99,6 @@ function Home({ presetCode }: { presetCode?: string }) {
       <InstallHint />
       <a class="btn block" href="#/regles">
         📖 Règles du jeu
-      </a>
-      <a class="btn block" href="#/kit">
-        🖨 Imprimer le kit de fiches (une fois pour toutes les parties)
       </a>
       <p class="muted center" style={{ fontSize: '0.85rem' }}>
         Aucun compte, aucune publicité. Seul un identifiant aléatoire de session est gardé sur ce téléphone. Projet de fans non affilié à Innersloth.
@@ -239,33 +232,72 @@ function GmForms() {
   return (
     <>
       <div class="card stack">
-        <h2>Créer une partie</h2>
-        <p class="muted">Vous serez le maître du jeu (vous ne jouez pas). Le terrain et les réglages enregistrés sur cet appareil sont réutilisés.</p>
-        <button
-          class="btn big block primary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              const r = await fetch('/api/games', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ terrain: sessions.terrain(), settings: sessions.settings() }),
-              });
-              const d = await r.json();
-              if (!r.ok) throw new Error(d.error ?? 'Erreur');
-              sessions.setGm({ code: d.code, token: d.gmToken, secret: d.gmSecret });
-              startGmConn(d.code, { kind: 'token', token: d.gmToken }, d.gmSecret);
-              go('/gm');
-            } catch (e) {
-              toast(`Création impossible : ${(e as Error).message}. Vérifiez la connexion.`, 'err');
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {busy ? 'Création…' : '＋ Créer une nouvelle partie'}
-        </button>
+        <h2 style={{ margin: 0 }}>Préparer une partie</h2>
+        <ol class="steps prep">
+          <li>
+            <span class="dot">1</span>
+            <div class="grow stack">
+              <span>
+                <strong>Imprimer le kit de fiches</strong> : une seule fois, il resservira pour toutes vos parties, dans n’importe quelle maison.
+              </span>
+              <a class="btn block" href="#/kit">
+                🖨 Imprimer le kit
+              </a>
+            </div>
+          </li>
+          <li>
+            <span class="dot">2</span>
+            <div class="grow stack">
+              <span>
+                <strong>Créer la partie</strong> : vous êtes le maître du jeu (vous ne jouez pas).
+              </span>
+              <button
+                class="btn big block primary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const r = await fetch('/api/games', {
+                      method: 'POST',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({ settings: sessions.settings() }),
+                    });
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(d.error ?? 'Erreur');
+                    sessions.setGm({ code: d.code, token: d.gmToken, secret: d.gmSecret });
+                    startGmConn(d.code, { kind: 'token', token: d.gmToken }, d.gmSecret);
+                    go('/gm');
+                  } catch (e) {
+                    toast(`Création impossible : ${(e as Error).message}. Vérifiez la connexion.`, 'err');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? 'Création…' : '＋ Créer une nouvelle partie'}
+              </button>
+            </div>
+          </li>
+          <li>
+            <span class="dot">3</span>
+            <div class="grow">
+              <strong>Poser et appairer les fiches</strong> : une fiche « Poste » par pièce, le bouton d’urgence dans la salle de réunion. Puis, dans votre tableau de bord, onglet Terrain → « 📷 Appairer des fiches » : scannez chaque fiche et touchez sa
+              pièce. Une fiche non appairée n’existe pas pour le jeu.
+            </div>
+          </li>
+          <li>
+            <span class="dot">4</span>
+            <div class="grow">
+              <strong>Inviter les joueurs</strong> : ils scannent le QR code affiché sur votre tableau de bord (ou tapent son code).
+            </div>
+          </li>
+          <li>
+            <span class="dot">5</span>
+            <div class="grow">
+              <strong>Tester et démarrer</strong> : l’onglet Partie du tableau de bord vous guide (tests des fiches, réglages, sécurité, démarrage).
+            </div>
+          </li>
+        </ol>
       </div>
       <form
         class="card stack"
