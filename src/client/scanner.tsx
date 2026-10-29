@@ -13,13 +13,26 @@ const RETRY_MS = 2000;
 /** Un QR code refusé n'est pas relu avant ce délai (sinon il compterait en boucle comme code erroné). */
 export const SAME_QR_IGNORE_MS = 15_000;
 
-export function Scanner({ onCode, manualLabel, autoStart }: { onCode: (code: string) => Promise<boolean | void>; manualLabel?: string; autoStart?: boolean }) {
+export function Scanner({
+  onCode,
+  ignore,
+  manualLabel,
+  autoStart,
+}: {
+  onCode: (code: string) => Promise<boolean | void>;
+  /** QR code à ne pas traiter pour l'instant : la caméra continue de lire sans s'arrêter. */
+  ignore?: (text: string) => boolean;
+  manualLabel?: string;
+  autoStart?: boolean;
+}) {
   const [active, setActive] = useState(!!autoStart);
   const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string>();
   const video = useRef<HTMLVideoElement>(null);
   const onCodeRef = useRef(onCode);
   onCodeRef.current = onCode;
+  const ignoreRef = useRef(ignore);
+  ignoreRef.current = ignore;
   const rejected = useRef<{ text: string; at: number }>();
 
   useEffect(() => {
@@ -67,7 +80,7 @@ export function Scanner({ onCode, manualLabel, autoStart }: { onCode: (code: str
               const text = await detect(v);
               const r = rejected.current;
               const again = !!text && !!r && r.text === text && Date.now() - r.at < SAME_QR_IGNORE_MS;
-              if (text && !stop && !again) {
+              if (text && !stop && !again && !ignoreRef.current?.(text)) {
                 stop = true;
                 setActive(false);
                 const ok = await onCodeRef.current(text);

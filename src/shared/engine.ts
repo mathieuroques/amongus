@@ -2,10 +2,11 @@
 // Toutes les vérifications d'éligibilité sont faites ici, côté serveur.
 
 import { FIXES, SABOTAGE_INFO } from './catalog';
+import { kitSheetByCode } from './kit';
 import { checkAnswer, makeFixChallenge, makeTaskChallenge } from './puzzles';
 import { cryptoRng, normalizeCode, randomDigits, shuffle, type Rng } from './rng';
 import { validSubscription } from './webpush';
-import { DEFAULT_SETTINGS, GATHER_MAJORITY_SEC, sanitizeSettings } from './settings';
+import { DEFAULT_SETTINGS, GATHER_MAJORITY_SEC, sanitizeSettings, startSettings } from './settings';
 import { availableSabotages, exampleTerrain, newId, sanitizeTerrain, startProblems } from './terrain';
 import type {
   ActiveSabotage, Challenge, FixKind, GameState, Meeting, PlayerState, SabotageKind, Settings, Station, Terrain, VoteResult, Winner,
@@ -186,6 +187,17 @@ function registerFailure(s: GameState, p: PlayerState, now: number, what: string
   }
 }
 
+/**
+ * Fiche du kit universel qui n'est pas appairée dans cette partie : elle n'existe pas pour le jeu. Message clair,
+ * signalé au MJ, sans compter comme un code erroné (le joueur n'y est pour rien).
+ */
+function unusedKitSheet(s: GameState, p: PlayerState, code: unknown, now: number) {
+  const k = s.terrain.kit ? kitSheetByCode(normalizeCode(String(code ?? ''))) : undefined;
+  if (!k || s.terrain.stations.some((x) => x.id === k.id)) return;
+  log(s, now, 'unused_sheet', `${p.name} a scanné la fiche « ${k.name} », qui n’est pas appairée : retirez-la ou appairez-la.`, true);
+  fail('unused_sheet', 'Cette fiche ne sert pas dans cette partie : ignorez-la et prévenez le maître du jeu.');
+}
+
 function activeCodes(s: GameState): Set<string> {
   const set = new Set<string>();
   for (const p of s.players) if (p.body && !p.body.reported && !p.body.vanished) set.add(p.body.code);
@@ -207,6 +219,7 @@ function uniqueDigits(s: GameState, rng: Rng): string {
 export function startGame(s: GameState, ctx: Ctx) {
   if (s.phase !== 'lobby') fail('not_lobby', 'La partie doit être dans le salon pour démarrer.');
   const players = s.players.filter((p) => !p.kicked && !p.left);
+  s.settings = startSettings(s.settings, players.length);
   const problems = startProblems(s.terrain, s.settings, players.length);
   if (problems.length) fail('cannot_start', problems.join(' '));
   const { now } = ctx;
@@ -799,6 +812,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       checkBlocked(p, now);
       const station = stationByCode(s, a.code);
       if (!station) {
+        unusedKitSheet(s, p, a.code, now);
         registerFailure(s, p, now, 'code de poste');
         fail('bad_code', 'Code de poste inconnu.');
       }
@@ -809,6 +823,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       checkBlocked(p, now);
       const station = stationByCode(s, a.code);
       if (!station) {
+        unusedKitSheet(s, p, a.code, now);
         registerFailure(s, p, now, 'code de poste');
         fail('bad_code', 'Code de poste inconnu.');
       }
@@ -875,6 +890,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       checkBlocked(p, now);
       const station = stationByCode(s, a.code);
       if (!station || station.kind !== 'emergency') {
+        unusedKitSheet(s, p, a.code, now);
         registerFailure(s, p, now, 'code du bouton d’urgence');
         fail('bad_code', 'Ce n’est pas le code du bouton d’urgence.');
       }
@@ -936,6 +952,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       checkBlocked(p, now);
       const station = stationByCode(s, a.code);
       if (!station) {
+        unusedKitSheet(s, p, a.code, now);
         registerFailure(s, p, now, 'code de poste');
         fail('bad_code', 'Code de poste inconnu.');
       }
@@ -957,6 +974,7 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       }
       const station = stationByCode(s, a.code);
       if (!station || station.kind !== 'reactor') {
+        unusedKitSheet(s, p, a.code, now);
         checkBlocked(p, now);
         registerFailure(s, p, now, 'code de poste réacteur');
         fail('bad_code', 'Ce n’est pas un poste Réacteur.');

@@ -3,7 +3,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { SABOTAGE_INFO, TASK_TYPE_LABEL } from '../shared/catalog';
-import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors } from '../shared/settings';
+import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors, startSettings } from '../shared/settings';
 import { startProblems, terrainWarnings } from '../shared/terrain';
 import type { Settings } from '../shared/types';
 import type { GmPlayer, GmView } from '../shared/view';
@@ -212,8 +212,9 @@ function useCheck(key: string): [boolean, (b: boolean) => void] {
 
 function LobbyPanel({ v, conn, goTab }: { v: GmView; conn: Conn; goTab: (t: Tab) => void }) {
   const players = v.players.filter((p) => !p.kicked);
-  const problems = startProblems(v.terrain, v.settings, players.length);
-  const terrainProblems = startProblems(v.terrain, v.settings, Math.max(players.length, 2 * v.settings.impostors + 1)).filter((p) => !/joueurs|imposteurs/.test(p));
+  const settings = startSettings(v.settings, players.length);
+  const problems = startProblems(v.terrain, settings, players.length);
+  const terrainProblems = startProblems(v.terrain, settings, Math.max(players.length, 2 * settings.impostors + 1)).filter((p) => !/joueurs|imposteurs/.test(p));
   const warnings = terrainWarnings(v.terrain);
   const [printed, setPrinted] = useCheck(`${v.code}.printed`);
   const [safety, setSafety] = useCheck(`${v.code}.${v.gameNumber}.safety`);
@@ -246,17 +247,31 @@ function LobbyPanel({ v, conn, goTab }: { v: GmView; conn: Conn; goTab: (t: Tab)
               Modifier
             </button>
           </Step>
-          <Step ok={v.settings.impostors <= maxImpostorsFor(players.length) && players.length >= 4} n={2}>
-            <strong>Réglages</strong> : {v.settings.impostors} imposteur(s) (conseillé pour {players.length} joueurs : {rec}), élimination toutes les {v.settings.killCooldownSec} s.{' '}
+          <Step ok={settings.impostors <= maxImpostorsFor(players.length) && players.length >= 4} n={2}>
+            <strong>Réglages</strong> : {settings.impostors} imposteur(s) {v.settings.autoImpostors ? '(automatique selon le nombre de joueurs)' : `(conseillé pour ${players.length} joueurs : ${rec})`}, élimination toutes les {v.settings.killCooldownSec} s.{' '}
             <button class="btn link" onClick={() => goTab('settings')}>
               Modifier
             </button>
           </Step>
           <Step ok={printed} n={3}>
-            <strong>Fiches imprimées et posées</strong>{' '}
-            <a class="btn link" href="#/print">
-              Imprimer
-            </a>
+            {v.terrain.kit ? (
+              <>
+                <strong>Fiches du kit posées et appairées</strong> : {v.terrain.stations.length} fiche(s).{' '}
+                <button class="btn link" onClick={() => goTab('terrain')}>
+                  Appairer
+                </button>{' '}
+                <a class="btn link" href="#/kit">
+                  Imprimer le kit
+                </a>
+              </>
+            ) : (
+              <>
+                <strong>Fiches imprimées et posées</strong>{' '}
+                <a class="btn link" href="#/print">
+                  Imprimer
+                </a>
+              </>
+            )}
             <label class="check">
               <input type="checkbox" checked={printed} onChange={(e) => setPrinted((e.target as HTMLInputElement).checked)} /> c’est fait
             </label>
@@ -675,10 +690,21 @@ function SettingsTab({ v, conn }: { v: GmView; conn: Conn }) {
                   {f.unit ? ` (${f.unit})` : ''}
                   {f.official ? ` — jeu officiel : ${f.official}` : ''}
                 </span>
-                <input type="number" inputMode="numeric" disabled={!editable} value={d[f.key] as number} onInput={(e) => set({ [f.key]: Number((e.target as HTMLInputElement).value) } as Partial<Settings>)} />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  disabled={!editable || (f.key === 'impostors' && !!d.autoImpostors)}
+                  value={f.key === 'impostors' && d.autoImpostors ? startSettings(d, n).impostors : (d[f.key] as number)}
+                  onInput={(e) => set({ [f.key]: Number((e.target as HTMLInputElement).value) } as Partial<Settings>)}
+                />
               </label>
             ))}
             {g === 'Joueurs et rôles' && (
+              <label class="check">
+                <input type="checkbox" disabled={!editable} checked={!!d.autoImpostors} onChange={(e) => set({ autoImpostors: (e.target as HTMLInputElement).checked })} /> Automatique : nombre conseillé, recalculé à chaque manche selon les joueurs présents
+              </label>
+            )}
+            {g === 'Joueurs et rôles' && !d.autoImpostors && (
               <small>
                 Avec {n} joueur(s) : conseillé {recommendedImpostors(n)}, maximum {maxImpostorsFor(n)}.{' '}
                 {editable && (

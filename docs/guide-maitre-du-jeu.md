@@ -10,7 +10,7 @@ Le MJ ne joue pas : il prépare, présente la sécurité, surveille et arbitre. 
 ## 2. Préparer le terrain (onglet Terrain)
 - **Pièces** : nom, étage, *Interdite*, *Passage* (escalier/couloir : pas de poste, pas d’élimination), *Cachette* autorisée, notes.
 - **Générer postes et tâches automatiquement** : crée un poste de tâches par pièce jouable, le bouton d’urgence dans la salle de réunion, 2 postes Réacteur, 2 postes Oxygène, Énergie, Radio, Moniteur de vie, et 15 tâches. Vous pouvez tout modifier ensuite.
-- **Imprimer avant de connaître la maison** : jusqu’à 40 fiches « Poste A, B… » dans des pièces provisoires, enregistrées aussitôt, avec un **code de récupération**. Imprimez chez vous, posez sur place les postes A à F et autant d’autres que vous voulez, renommez leurs pièces, puis **🧹 Retirer les fiches non posées** : elles n’existent plus pour le jeu. **↩ Remettre les fiches retirées** et **🔑 Code de récupération** font revenir les fiches (détails dans [Installer la maison](installation-terrain.md)).
+- **Kit de fiches universel (conseillé)** : **Utiliser le kit**, puis **📷 Appairer des fiches** : scannez chaque fiche posée et touchez sa pièce. Fiches imprimées une fois pour toutes ([PDF](pdf/kit-fiches.pdf)) ; une fiche non appairée n’existe pas pour le jeu ; les tâches se répartissent toutes seules et se recalculent à chaque changement, entre deux manches comme pendant la préparation (détails dans [Installer la maison](installation-terrain.md)).
 - **Postes** : nom, pièce, type ; chaque poste a un code imprimé. « ↻ » change le code (il faut alors réimprimer la fiche).
 - **Tâches** : nom, type (commune / longue / courte), active ou non, étapes (poste + mini-jeu). Une tâche longue doit avoir ses étapes dans des pièces différentes.
 - **Conduits** (facultatif, aucun par défaut) : itinéraires sûrs réservés aux imposteurs. Ne les activez que si la maison offre un second chemin éclairé et sans marche.
@@ -23,7 +23,7 @@ Des **conseils** s’affichent (poste sans tâche, pièce sans poste, tâche lon
 
 ## 3. Paramètres (onglet Paramètres)
 Trois **préréglages** en un geste : *Petit groupe (≤ 12)*, *Groupe moyen (13–24)*, *Grande partie (25–40)* ; le nombre d’imposteurs est ajusté au nombre d’inscrits (bouton « Appliquer le conseil »).
-Nombre d’imposteurs (conseil affiché selon le nombre de joueurs ; ils doivent rester strictement moins nombreux que l’équipage), délais d’élimination et de sabotage, durées des réunions, nombre de tâches, votes anonymes, confirmation des éjections, barre de tâches, tâches visuelles, disparition des corps, rôles visibles par les fantômes. Les valeurs officielles du jeu vidéo sont rappelées à côté de chaque champ.
+Nombre d’imposteurs (conseil affiché selon le nombre de joueurs ; ils doivent rester strictement moins nombreux que l’équipage ; case **Automatique** : le nombre conseillé est recalculé à chaque démarrage selon les joueurs présents), délais d’élimination et de sabotage, durées des réunions, nombre de tâches, votes anonymes, confirmation des éjections, barre de tâches, tâches visuelles, disparition des corps, rôles visibles par les fantômes. Les valeurs officielles du jeu vidéo sont rappelées à côté de chaque champ.
 
 **Réglages conseillés :**
 | Joueurs | Imposteurs | Délai d’élimination | Discussion / vote |
@@ -35,7 +35,7 @@ Nombre d’imposteurs (conseil affiché selon le nombre de joueurs ; ils doivent
 Prévoyez au moins 1,5 poste de tâches par tranche de 4 joueurs pour éviter les embouteillages.
 
 ## 4. Imprimer (bouton Imprimer)
-Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papier), fiches spéciales (bouton d’urgence, réacteur, oxygène, énergie, radio, moniteur), étiquettes des pièces et panneaux « zone interdite » / « passage », badges fantômes, aide-mémoire. « Imprimer » → imprimante ou « Enregistrer en PDF ». La case **« Imprimer avant de connaître la maison »** (cochée d’office tant que les pièces sont provisoires) n’imprime rien de ce qui peut changer sur place : pièces à écrire à la main, pas de liste de tâches, affiche sans code de partie, aide-mémoire sans réglages ; elle ajoute la fiche du maître du jeu (plan de pose et code de récupération). Les codes restent valables d’une partie à l’autre tant que vous ne les régénérez pas.
+Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papier), fiches spéciales (bouton d’urgence, réacteur, oxygène, énergie, radio, moniteur), étiquettes des pièces et panneaux « zone interdite » / « passage », badges fantômes, aide-mémoire. « Imprimer » → imprimante ou « Enregistrer en PDF ». Avec le kit, les fiches de postes ne s’impriment pas ici : elles viennent du kit (accueil → « Imprimer le kit de fiches »), sans lien avec la partie. Les codes restent valables d’une partie à l’autre tant que vous ne les régénérez pas.
 
 > **Énigmes papier (mise à jour)** : la grille « inventaire » est inchangée (vos anciennes fiches restent utilisables, la nouvelle impression ajoute seulement les repères A–F / 1–8 et les traits des moitiés), mais les **bandes « puzzle » portent désormais deux lettres** (haut et bas) : **réimprimez et redécoupez** les fiches qui contiennent un puzzle (« Puzzle », « Énigme du coffre »).
 

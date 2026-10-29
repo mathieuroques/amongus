@@ -3,6 +3,7 @@ import { GAME_CODE_RE } from '../shared/protocol';
 import { gmConn, go, playerConn, startGmConn, startPlayerConn } from './conn';
 import { GmApp } from './gm';
 import { PlayerApp } from './player';
+import { KitPrintPage } from './kit-print';
 import { PrintPage } from './print';
 import { RulesPage } from './rules';
 import { sessions, storageAvailable } from './session';
@@ -36,6 +37,8 @@ export function App() {
   } else if (h === '/print') {
     const c = gmConn();
     page = c ? <PrintPage conn={c} /> : <Home />;
+  } else if (h === '/kit') {
+    page = <KitPrintPage />;
   } else if (h.startsWith('/regles')) {
     page = <RulesPage />;
   } else if (h.startsWith('/j/')) {
@@ -100,6 +103,9 @@ function Home({ presetCode }: { presetCode?: string }) {
       <InstallHint />
       <a class="btn block" href="#/regles">
         📖 Règles du jeu
+      </a>
+      <a class="btn block" href="#/kit">
+        🖨 Imprimer le kit de fiches (une fois pour toutes les parties)
       </a>
       <p class="muted center" style={{ fontSize: '0.85rem' }}>
         Aucun compte, aucune publicité. Seul un identifiant aléatoire de session est gardé sur ce téléphone. Projet de fans non affilié à Innersloth.
@@ -219,7 +225,10 @@ function JoinForm({ preset }: { preset?: string }) {
 }
 
 function normalizeGame(s: string) {
-  return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  return s
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6);
 }
 
 function GmForms() {

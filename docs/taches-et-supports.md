@@ -33,6 +33,9 @@ S’il n’y a qu’une tâche du joueur à un poste, le mini-jeu s’ouvre dès
 | Oxygène | Oxygène A et B | recopier un code à 5 chiffres |
 | Réacteur | Réacteur A et B | maintenir un bouton, à deux, en même temps |
 
+## Kit de fiches universel
+Imprimé une fois pour toutes ([PDF](pdf/kit-fiches.pdf), ou accueil → « Imprimer le kit de fiches ») : 40 postes, 8 fiches spéciales, étiquettes, panneaux, badges et aide-mémoire génériques. Le catalogue du kit compte **36 tâches (40 étapes)**, figées : les 15 tâches ci-dessus et 21 tâches courtes de plus, pour que chacune des 40 fiches ait une tâche quand toutes sont posées. Les énigmes papier sont imprimées sur les postes 01 (« Inventaire »), 02 (« Puzzle »), 03 et 04 (« Énigme du coffre ») et le scan médical se fait devant le poste 05 ; les autres étapes sont réparties automatiquement sur les fiches appairées, à chaque changement.
+
 ## Supports générés par l’application (bouton « Imprimer » du MJ)
 - **Affiche d’invitation** : QR code du lien d’invitation + code de partie (valable pour toutes les « nouvelles parties » de la même session).
 - **Fiches de postes de tâches** : nom, pièce, QR code, code court, liste des tâches réalisables, énigmes papier (grille de symboles repérée A–F / 1–8, moitiés marquées d’un trait épais ; bandes à découper portant une lettre en haut et une lettre blanche sur fond noir en bas).

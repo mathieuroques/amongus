@@ -18,7 +18,7 @@ Un site web gratuit pour jouer à un jeu de rôles cachés **inspiré d’Among 
 
 1. **Mettre le site en ligne une fois pour toutes** (section 3 ; 10 minutes, gratuit). Vous obtenez une adresse du type `https://imposteurs.votre-nom.workers.dev`.
 2. Ouvrez cette adresse → **Maître du jeu** → **Créer une nouvelle partie**. Notez le **code maître du jeu** affiché.
-3. Onglet **Terrain** (vous ne connaissez pas encore la maison ? bouton **📄 Imprimer avant de connaître la maison** : imprimez large, posez sur place les fiches voulues, les autres n’existeront pas pour le jeu ; voir [Installer la maison](docs/installation-terrain.md)) : saisissez vos pièces (cochez *Interdite* ou *Passage* pour les escaliers/couloirs), cliquez **Générer postes et tâches automatiquement**, puis **Enregistrer le terrain**.
+3. Onglet **Terrain** — le plus simple : **Utiliser le kit**. Les fiches du [kit universel](docs/pdf/kit-fiches.pdf) s’impriment une fois pour toutes ; sur place, **📷 Appairer des fiches** : scannez chaque fiche posée et touchez sa pièce, les tâches se répartissent toutes seules (voir [Installer la maison](docs/installation-terrain.md)). Sinon : saisissez vos pièces (cochez *Interdite* ou *Passage* pour les escaliers/couloirs), cliquez **Générer postes et tâches automatiquement**, puis **Enregistrer le terrain**.
 4. Onglet **Paramètres** : choisissez le nombre d’imposteurs (un conseil s’affiche) et **Enregistrer**.
 5. **Imprimer** : imprimez les fiches, collez-les dans les pièces (jamais dans un escalier). Onglet **🧪 Tests** : scannez chaque fiche posée et testez chaque tâche (une coche ✅ par tâche).
 6. Le jour J : affichez l’**affiche d’invitation** (ou partagez le lien). Les joueurs scannent, choisissent un pseudonyme, arrivent dans le salon.
@@ -41,6 +41,7 @@ Tout est détaillé dans le [guide du maître du jeu](docs/guide-maitre-du-jeu.m
 | MJ | [Checklists avant / pendant / après](docs/checklists.md) | [PDF](docs/pdf/checklists.pdf) |
 | Tous | [Alertes, sons et notifications : fonctionnement et conseils](docs/alertes-notifications.md) | [PDF](docs/pdf/alertes-notifications.pdf) |
 | MJ | [Mécaniques du jeu vidéo impossibles en vrai, et ce qui les remplace](docs/limites-mecaniques.md) | [PDF](docs/pdf/limites-mecaniques.pdf) |
+| MJ | Kit de fiches universel (imprimé une fois pour toutes) | [PDF](docs/pdf/kit-fiches.pdf) |
 | MJ | [Tâches et supports imprimables](docs/taches-et-supports.md) | [PDF](docs/pdf/taches-et-supports.pdf) · [exemple de fiches](docs/pdf/exemple-supports-imprimables.pdf) |
 | Curieux | [Recherche des règles officielles + matrice d’adaptation](docs/recherche-regles.md) | [PDF](docs/pdf/recherche-regles.pdf) |
 | Technique | [Conception (architecture, sécurité, quotas)](docs/conception.md) | [PDF](docs/pdf/conception.pdf) |

@@ -85,13 +85,15 @@ export interface Terrain {
   meetingRoomId: string;
   /** Consignes de sécurité affichées à tous avant le démarrage (sorties, escaliers, zones interdites…). */
   safetyNotes: string;
-  /** Code de récupération des fiches imprimées avant de connaître la maison (voir blankTerrain). */
-  printCode?: string;
+  /** Terrain du kit de fiches universel (kit.ts) : fiches fixes appairées aux pièces, tâches calculées automatiquement. */
+  kit?: boolean;
 }
 
 export interface Settings {
   maxPlayers: number;
   impostors: number;
+  /** Nombre d'imposteurs recalculé à chaque démarrage selon le nombre de joueurs (nombre conseillé). */
+  autoImpostors: boolean;
   killCooldownSec: number;
   initialKillCooldownSec: number;
   emergencyMeetingsPerPlayer: number;

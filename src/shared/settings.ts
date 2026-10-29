@@ -8,6 +8,7 @@ import type { Settings } from './types';
 export const DEFAULT_SETTINGS: Settings = {
   maxPlayers: 40,
   impostors: 3,
+  autoImpostors: false,
   killCooldownSec: 60, // officiel : 45 s (10–60)
   initialKillCooldownSec: 30, // officiel : 10 s au premier tour
   emergencyMeetingsPerPlayer: 1, // officiel : 1
@@ -70,7 +71,7 @@ export function sanitizeSettings(input: unknown, base: Settings = DEFAULT_SETTIN
       }
     }
   }
-  for (const key of ['anonymousVotes', 'confirmEjects', 'visualTasks', 'ghostsSeeRoles'] as const) {
+  for (const key of ['anonymousVotes', 'confirmEjects', 'visualTasks', 'ghostsSeeRoles', 'autoImpostors'] as const) {
     if (key in src) out[key] = Boolean(src[key]);
   }
   if (src.taskBarUpdates === 'always' || src.taskBarUpdates === 'meetings' || src.taskBarUpdates === 'never') {
@@ -87,6 +88,11 @@ export function recommendedImpostors(players: number): number {
   if (players <= 24) return 4;
   if (players <= 32) return 5;
   return 6;
+}
+
+/** Réglages réellement utilisés au démarrage : nombre d'imposteurs conseillé si « automatique » est coché. */
+export function startSettings(s: Settings, players: number): Settings {
+  return s.autoImpostors ? { ...s, impostors: Math.max(1, Math.min(maxImpostorsFor(players), recommendedImpostors(players))) } : s;
 }
 
 /** Le nombre d'imposteurs doit rester strictement inférieur au nombre de membres d'équipage. */

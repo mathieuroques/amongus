@@ -176,6 +176,7 @@ video.scanner { width: 100%; border-radius: 14px; background: #000; max-height: 
 /* impression */
 @media print {
   @page { margin: 10mm; }
+  :root { color-scheme: light; }
   html { background: #fff; }
   body { background: #fff; color: #000; font-size: 12pt; }
   .noprint, .toast { display: none !important; }

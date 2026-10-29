@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { FIXES, GAMES, STATION_KIND_LABEL } from '../shared/catalog';
+import { kitSheetByCode } from '../shared/kit';
 import { normalizeCode } from '../shared/rng';
 import type { FixKind, Station } from '../shared/types';
 import type { GmView } from '../shared/view';
@@ -104,7 +105,8 @@ export function GmTests({ v, conn }: { v: GmView; conn: Conn }) {
             const c = normalizeCode(raw);
             const s = v.terrain.stations.find((x) => x.code === c);
             if (!s) {
-              toast(`Code ${c} inconnu : cette fiche ne correspond pas au terrain enregistré (réimprimez-la).`, 'err');
+              const k = v.terrain.kit ? kitSheetByCode(c) : undefined;
+              toast(k ? `${k.name} n’est pas appairée : onglet Terrain → « Appairer des fiches ».` : `Code ${c} inconnu : cette fiche ne correspond pas au terrain enregistré (réimprimez-la).`, 'err');
               return false;
             }
             setScanned(s);

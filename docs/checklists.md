@@ -10,7 +10,7 @@
 
 ## Le jour J, avant l’arrivée des joueurs
 - [ ] Fiches posées (aucune dans un escalier ; « Énergie » loin du vrai tableau électrique).
-- [ ] Fiches imprimées à l’avance (« Poste A, B… ») : postes A à F posés avec leurs fiches spéciales, pièces renommées, **fiches non posées retirées** et terrain **enregistré**, sans régénérer les postes. Fiche du MJ (code de récupération) gardée.
+- [ ] Kit de fiches : chaque fiche posée **appairée** (onglet Terrain → « Appairer des fiches »), postes 01 à 05 préparés (grilles, bandes découpées, croix au sol), fiches non posées rangées.
 - [ ] Zones interdites signalées ; sorties et escaliers dégagés ; lumières allumées.
 - [ ] Chaque QR code vérifié (onglet 🧪 Tests → « Vérifier une fiche posée »).
 - [ ] Toutes les tâches et réparations testées (onglet 🧪 Tests : « x/y vérifiés »).
