@@ -85,6 +85,8 @@ export interface Terrain {
   meetingRoomId: string;
   /** Consignes de sécurité affichées à tous avant le démarrage (sorties, escaliers, zones interdites…). */
   safetyNotes: string;
+  /** Code de récupération des fiches imprimées avant de connaître la maison (voir blankTerrain). */
+  printCode?: string;
 }
 
 export interface Settings {

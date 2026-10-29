@@ -23,18 +23,29 @@
 8. Prévoir un **point de rassemblement** (souvent la salle de réunion) et vérifier que les sorties sont dégagées.
 
 ## Imprimer avant de connaître la maison
-Pratique pour un week-end dans une maison louée : on imprime chez soi, on installe sur place.
-1. **Avant de partir** : onglet Terrain → **📄 Imprimer avant de connaître la maison**, indiquez combien de fiches de postes imprimer (une par pièce jouable, 25 au plus). **Prévoyez large** : les fiches non posées se retirent sur place en un geste. Puis **Enregistrer le terrain**, puis **Imprimer**. La case « Laisser le nom de la pièce en blanc » est cochée d’office : les fiches s’appellent « Poste A », « Poste B »… et la pièce est une ligne à remplir à la main. Les étiquettes de pièces sont vierges et des panneaux « zone interdite » / « passage » génériques sont ajoutés. Par sécurité, **exportez** aussi le terrain (fichier).
-2. **Sur place** :
-   - posez les « Poste A, B… » **dans l’ordre des lettres**, chacun dans une **pièce jouable différente** (au moins A à F : toutes les fiches spéciales vont à côté d’elles), et chaque fiche spéciale (réacteur, oxygène, bouton d’urgence…) **à côté du poste indiqué** sur la fiche (« À poser dans la même pièce que la fiche « Poste C » ») ; écrivez le nom de la pièce sur les fiches si vous le souhaitez ;
-   - onglet Terrain : renommez « Pièce A » en « Salon », etc., indiquez l’étage, ajoutez les escaliers, couloirs et zones interdites, puis **Enregistrer** ;
-   - une fiche posée ailleurs que prévu ? Changez simplement la pièce du poste dans la liste des postes. Moins de fiches que de pièces ? Certaines pièces n’auront pas de poste, ce n’est pas grave ;
-   - **fiches en trop** : une fois toutes les pièces utilisées renommées, touchez **🧹 Retirer les fiches non posées** (onglet Terrain), puis **Enregistrer**. Les pièces encore nommées « Pièce X » disparaissent avec leurs postes ; leurs tâches passent automatiquement sur les postes posés (une énigme papier restée sur une fiche non posée devient un mini-jeu sans papier). Les codes des fiches posées ne changent pas ;
-   - vérifiez que les deux Réacteurs (et les deux Oxygènes) ne sont pas dans des pièces voisines ; sinon déplacez une fiche et corrigez sa pièce dans Terrain.
-3. **Ne cliquez pas sur « Générer postes et tâches automatiquement »** sur place : les codes changeraient et les fiches imprimées ne fonctionneraient plus. Tant que vous ne le faites pas, les codes restent valables.
-4. Vérifiez chaque fiche dans l’onglet 🧪 Tests : l’application affiche le poste et la pièce que vous lui avez attribuée.
+Pratique pour un week-end dans une maison louée : on imprime tout chez soi, on installe sur place, et le nombre de pièces utilisées s’adapte au nombre d’invités. **Une fiche que vous ne posez pas n’existe tout simplement pas pour le jeu.**
 
-La partie créée avant de partir est effacée après 7 jours sans activité, mais le terrain reste mémorisé sur l’appareil du MJ et est repris automatiquement par toute nouvelle partie : les fiches imprimées restent utilisables (sinon, **Importer** le fichier exporté).
+### Avant de partir
+1. Onglet Terrain → **📄 Imprimer avant de connaître la maison**. Indiquez combien de fiches de postes imprimer : une par pièce jouable possible, **40 au plus**. Prévoyez large (par exemple 30 pour une maison de 10 à 30 pièces). Le terrain est **enregistré aussitôt**.
+2. **Imprimer** : la case « Imprimer avant de connaître la maison » est cochée d’office. Rien de ce qui peut changer sur place n’est imprimé :
+   - les fiches s’appellent « Poste A », « Poste B »… avec une ligne « Pièce : ____ » à remplir à la main, sans liste de tâches (le téléphone indique la tâche à faire) ;
+   - l’affiche d’invitation mène à l’accueil du site, avec une ligne pour écrire à la main le code de la partie ;
+   - l’aide-mémoire ne cite ni le nombre d’imposteurs ni les délais, que vous réglerez sur place selon le nombre d’invités ;
+   - étiquettes de pièces vierges et panneaux « zone interdite » / « zone de passage » génériques.
+3. Gardez la **fiche du maître du jeu** (première page, à ne pas afficher) : elle porte le **code de récupération** et le plan de pose (quelles fiches spéciales vont avec quel poste, où coller la croix du scan médical, où poser les bandes du puzzle).
+
+### Sur place
+1. Posez une fiche « Poste » par pièce jouable, jamais dans un escalier. **Les postes A à F sont indispensables** : ils portent les fiches spéciales, les énigmes papier et le scan médical. Le poste A va dans la salle de réunion (avec le bouton d’urgence) ; éloignez B de D (réacteurs) et C de E (oxygène). Posez ensuite autant de postes G, H… que vous voulez, dans n’importe quel ordre.
+2. Posez chaque fiche spéciale avec son poste (colonne « Avec » de la fiche du MJ), collez la croix au sol devant le poste du scan médical, découpez les bandes du puzzle.
+3. Onglet Terrain : renommez chaque pièce où une fiche est posée (« Pièce A » → « Salon »), indiquez l’étage, ajoutez escaliers, couloirs et zones interdites. Une fiche posée ailleurs que prévu ? Changez la pièce du poste dans la liste des postes ; deux fiches dans une même grande pièce ? Rattachez le poste à la pièce déjà renommée.
+4. Touchez **🧹 Retirer les fiches non posées**, puis **Enregistrer le terrain**. Les pièces encore nommées « Pièce X » disparaissent avec leurs fiches ; leurs tâches passent sur les postes posés, et chaque poste posé a au moins une tâche. Les codes des fiches posées ne changent pas. Tant que ce n’est pas fait, la partie refuse de démarrer.
+5. Onglet 🧪 Tests : scannez chaque fiche posée (l’application affiche le poste et la pièce) et testez chaque tâche.
+
+**Une fiche oubliée ?** Le bouton **↩ Remettre les fiches retirées** les fait revenir (vos pièces renommées sont conservées) : renommez sa pièce, puis retirez à nouveau les autres.
+
+**Ne cliquez pas sur « Générer postes et tâches automatiquement »** ni « Charger l’exemple » : les codes changeraient et les fiches imprimées ne fonctionneraient plus.
+
+**Partie effacée ou autre appareil ?** La partie créée avant de partir est effacée après 7 jours sans activité, et le terrain n’est mémorisé que sur l’appareil qui l’a enregistré. Dans tous les cas : créez une partie, onglet Terrain → **🔑 Code de récupération**, saisissez le code de la fiche du MJ. Toutes les fiches imprimées fonctionnent à nouveau.
 
 ## Conseils de répartition
 - 1 poste de tâches par pièce jouable ; au-delà de 25 joueurs, ajoutez un deuxième poste dans les grandes pièces.

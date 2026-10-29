@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { GAMES, STATION_KIND_LABEL, TASK_TYPE_LABEL } from '../shared/catalog';
 import { CODE_ALPHABET, randomCode } from '../shared/rng';
-import { blankTerrain, EXAMPLE_ROOMS, generateTerrain, newId, PLACEHOLDER_ROOM, removeUnplacedRooms } from '../shared/terrain';
+import { BLANK_MAX, blankTerrain, EXAMPLE_ROOMS, generateTerrain, newId, parsePrintCode, PLACEHOLDER_ROOM, removeUnplacedRooms, restorePrinted } from '../shared/terrain';
 import type { GameKind, StationKind, TaskType, Terrain } from '../shared/types';
 import type { GmView } from '../shared/view';
 import type { Connection } from './net';
@@ -27,15 +27,20 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
   const playable = t.rooms.filter((r) => !r.forbidden && !r.transit);
   const taskStations = t.stations.filter((s) => s.kind === 'task');
 
-  const save = async () => {
-    const r = await conn.act({ type: 'terrain', terrain: t });
+  const save = async (next = t, done = 'Terrain enregistré (et mémorisé sur cet appareil pour les prochaines parties).') => {
+    const r = await conn.act({ type: 'terrain', terrain: next });
     if (r.ok) {
+      setT(next);
       setDirty(false);
-      sessions.setTerrain(t);
-      toast('Terrain enregistré (et mémorisé sur cet appareil pour les prochaines parties).', 'ok');
+      sessions.setTerrain(next);
+      toast(done, 'ok');
     }
     return r;
   };
+  const placeholders = t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name));
+  const printed = parsePrintCode(t.printCode ?? '') ? blankTerrain(parsePrintCode(t.printCode!)!.count, parsePrintCode(t.printCode!)!.seed) : undefined;
+  const missing = printed ? printed.stations.filter((s) => !t.stations.some((x) => x.id === s.id)).length : 0;
+  const printedWarning = t.printCode ? '\n\nAttention : les fiches imprimées à l’avance ne fonctionneraient plus.' : '';
 
   return (
     <div class="stack">
@@ -103,7 +108,7 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
             <button
               class="btn small warn"
               onClick={() => {
-                if (!confirm('Recréer automatiquement les postes et les tâches à partir de ces pièces ? Les codes changent : il faudra réimprimer les fiches.')) return;
+                if (!confirm('Recréer automatiquement les postes et les tâches à partir de ces pièces ? Les codes changent : il faudra réimprimer les fiches.' + printedWarning)) return;
                 try {
                   const g = generateTerrain(t.rooms.map((r) => ({ name: r.name, floor: r.floor, forbidden: r.forbidden, transit: r.transit })), Math.max(0, t.rooms.findIndex((r) => r.id === t.meetingRoomId)));
                   g.name = t.name;
@@ -129,7 +134,7 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
             <button
               class="btn small"
               onClick={() => {
-                if (!confirm('Remplacer par la maison d’exemple ?')) return;
+                if (!confirm('Remplacer par la maison d’exemple ?' + printedWarning)) return;
                 setT(generateTerrain(EXAMPLE_ROOMS, 0, undefined, 'Maison d’exemple'));
                 setDirty(true);
               }}
@@ -138,42 +143,82 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
             </button>
             <button
               class="btn small"
+              disabled={!editable}
               onClick={() => {
-                const n = Number(prompt('Imprimer sans connaître la maison : combien de fiches de postes imprimer (une par pièce jouable, 25 au plus) ? Prévoyez large : les fiches non posées se retirent sur place en un geste.', '12'));
+                const n = Number(prompt(`Imprimer sans connaître la maison : combien de fiches de postes imprimer (une par pièce jouable, ${BLANK_MAX} au plus) ? Prévoyez large : les fiches non posées seront simplement ignorées.`, '30'));
                 if (!n || n < 1) return;
-                const g = blankTerrain(n);
-                g.safetyNotes = t.safetyNotes;
-                setT(g);
-                setDirty(true);
-                toast('Pièces provisoires créées : enregistrez, puis imprimez. Sur place, renommez les pièces.', 'info');
+                if (t.stations.length && !confirm('Remplacer le terrain actuel par des pièces provisoires (Pièce A, B…) ? Il est enregistré aussitôt.' + printedWarning)) return;
+                const b = blankTerrain(n);
+                const g = { ...b, safetyNotes: t.safetyNotes || b.safetyNotes };
+                void save(g, `Terrain enregistré. Code de récupération : ${g.printCode} (imprimé sur la fiche du MJ). Vous pouvez imprimer.`);
               }}
             >
               📄 Imprimer avant de connaître la maison
             </button>
+            <button
+              class="btn small"
+              disabled={!editable}
+              onClick={() => {
+                const code = prompt('Code de récupération des fiches imprimées (sur la fiche du MJ, par ex. 30-K7QM2X) :', t.printCode ?? '');
+                if (!code) return;
+                try {
+                  const g = restorePrinted(t, code);
+                  if (g.printCode !== t.printCode && t.stations.length && !confirm('Remplacer le terrain actuel par les fiches de ce code ? Il est enregistré aussitôt.')) return;
+                  void save(g, 'Fiches imprimées retrouvées : elles fonctionnent à nouveau.');
+                } catch (e) {
+                  toast((e as Error).message, 'err');
+                }
+              }}
+            >
+              🔑 Code de récupération
+            </button>
           </div>
-          {t.rooms.some((r) => PLACEHOLDER_ROOM.test(r.name)) && (
+          {t.printCode && (
             <div class="card warn stack">
               <p>
-                Pièces provisoires : posez les fiches dans l’ordre des lettres, « Poste A » puis B, C… chacune dans une pièce différente (A à F d’abord : les fiches spéciales vont à côté d’elles). Renommez ici « Pièce A » en « Cuisine », etc., indiquez l’étage
-                et ajoutez escaliers et zones interdites. Ne cliquez <strong>pas</strong> sur « Générer automatiquement » : les codes changeraient. Une fiche posée ailleurs ? Changez la pièce du poste dans la liste ci-dessous.
+                Fiches imprimées à l’avance · code de récupération <strong>{t.printCode}</strong> (sur la fiche du MJ). Ne cliquez <strong>pas</strong> sur « Générer automatiquement » : les codes changeraient.
               </p>
-              <p>Fiches en trop : une fois toutes les pièces utilisées renommées, retirez celles qui portent encore un nom provisoire. Leurs tâches passent sur les postes posés.</p>
-              <button
-                class="btn small"
-                onClick={() => {
-                  const left = t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name)).map((r) => r.name);
-                  if (!confirm(`Retirer ${left.join(', ')} et leurs postes (fiches non posées) ? Vérifiez que toutes les pièces où une fiche est posée ont été renommées.`)) return;
-                  try {
-                    setT(removeUnplacedRooms(t));
-                    setDirty(true);
-                    toast('Fiches non posées retirées : vérifiez puis enregistrez.', 'info');
-                  } catch (e) {
-                    toast((e as Error).message, 'err');
-                  }
-                }}
-              >
-                🧹 Retirer les fiches non posées
-              </button>
+              {placeholders.length > 0 && (
+                <>
+                  <p>
+                    Sur place : posez au moins les fiches « Poste A » à « Poste F » (les fiches spéciales vont avec elles), puis autant d’autres que vous voulez, une par pièce. Renommez ici chaque pièce où une fiche est posée (« Pièce A » → « Salon »), indiquez l’étage et
+                    ajoutez escaliers et zones interdites. Une fiche posée ailleurs que prévu ? Changez la pièce du poste dans la liste des postes.
+                  </p>
+                  <p>Puis retirez les fiches non posées : elles disparaissent du jeu comme si elles n’avaient jamais existé, et leurs tâches passent sur les postes posés.</p>
+                  <button
+                    class="btn small"
+                    onClick={() => {
+                      if (!confirm(`Retirer du jeu ${placeholders.map((r) => r.name).join(', ')} et leurs fiches ? Seules les pièces renommées sont gardées.`)) return;
+                      try {
+                        setT(removeUnplacedRooms(t));
+                        setDirty(true);
+                        toast('Fiches non posées retirées : vérifiez puis enregistrez le terrain.', 'info');
+                      } catch (e) {
+                        toast((e as Error).message, 'err');
+                      }
+                    }}
+                  >
+                    🧹 Retirer les fiches non posées ({placeholders.length})
+                  </button>
+                </>
+              )}
+              {missing > 0 && (
+                <button
+                  class="btn small"
+                  onClick={() => {
+                    if (!confirm(`Remettre les ${missing} fiche(s) retirée(s) ? Elles reviennent dans des pièces provisoires ; vos pièces renommées sont conservées.`)) return;
+                    try {
+                      setT(restorePrinted(t));
+                      setDirty(true);
+                      toast('Fiches remises : renommez les pièces où elles sont posées, retirez les autres, puis enregistrez.', 'info');
+                    } catch (e) {
+                      toast((e as Error).message, 'err');
+                    }
+                  }}
+                >
+                  ↩ Remettre les fiches retirées ({missing})
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -315,7 +360,7 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
 
       <div class="card row" style={{ position: 'sticky', bottom: 0 }}>
         {editable && (
-          <ActButton class="primary" disabled={!dirty} run={save}>
+          <ActButton class="primary" disabled={!dirty} run={() => save()}>
             💾 Enregistrer le terrain
           </ActButton>
         )}

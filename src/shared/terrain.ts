@@ -3,7 +3,7 @@
 // d'exemple, un générateur automatique et la validation des données reçues.
 
 import { GAMES } from './catalog';
-import { CODE_ALPHABET, cryptoRng, randomCode, type Rng } from './rng';
+import { CODE_ALPHABET, cryptoRng, randomCode, seededRng, type Rng } from './rng';
 import type { GameKind, Passage, Room, SabotageKind, Settings, Station, StationKind, TaskDef, TaskType, Terrain } from './types';
 
 interface TaskTemplate {
@@ -144,80 +144,196 @@ export const PLACEHOLDER_ROOM = /^Pièce [A-Z]{1,2}$/;
 
 const letter = (i: number) => (i < 26 ? '' : String.fromCharCode(64 + Math.floor(i / 26))) + String.fromCharCode(65 + (i % 26));
 
-/** Les postes spéciaux d'un terrain préparé à l'avance sont tous dans les pièces A à F, posées en premier. */
+/** Fiches indispensables d'un terrain préparé à l'avance (A à F) : postes spéciaux, énigmes papier et scan au sol y sont tous. */
 export const BLANK_CORE = 6;
+export const BLANK_MAX = 40;
+
+/** Tâches courtes supplémentaires : assez d'étapes pour que chacune des 40 fiches possibles ait une tâche. */
+const EXTRA_TEMPLATES: TaskTemplate[] = [
+  { name: 'Réglage du bouclier', type: 'short', games: ['calibrate'] },
+  { name: 'Code de sécurité', type: 'short', games: ['order'] },
+  { name: 'Diagnostic des systèmes', type: 'short', games: ['sequence'] },
+  { name: 'Téléchargement', type: 'short', games: ['wait'] },
+  { name: 'Tri des déchets', type: 'short', games: ['targets'] },
+  { name: 'Raccordement électrique', type: 'short', games: ['wires'] },
+  { name: 'Pilotage', type: 'short', games: ['slider'] },
+  { name: 'Contrôle d’identité', type: 'short', games: ['swipe'] },
+  { name: 'Mise à jour du logiciel', type: 'short', games: ['wait'] },
+  { name: 'Purge des conduits', type: 'short', games: ['targets'] },
+  { name: 'Stabilisation', type: 'short', games: ['slider'] },
+  { name: 'Combinaison du coffre-fort', type: 'short', games: ['order'] },
+  { name: 'Réglage de la pression', type: 'short', games: ['calibrate'] },
+  { name: 'Branchement des capteurs', type: 'short', games: ['wires'] },
+  { name: 'Réparation du hublot', type: 'short', games: ['targets'] },
+  { name: 'Calibrage du radar', type: 'short', games: ['calibrate'] },
+  { name: 'Vérification des fusibles', type: 'short', games: ['wires'] },
+  { name: 'Saisie des coordonnées', type: 'short', games: ['order'] },
+  { name: 'Synchronisation', type: 'short', games: ['sequence'] },
+  { name: 'Équilibrage du moteur', type: 'short', games: ['slider'] },
+  { name: 'Sauvegarde des données', type: 'short', games: ['wait'] },
+];
+
+/** Mini-jeu lié à ce qui est posé avec la fiche (énigme imprimée, croix au sol) : il ne change jamais de poste. */
+export const isFixedGame = (g: GameKind) => !!GAMES[g].paper || g === 'scan';
+
+const SEED_SPACE = CODE_ALPHABET.length ** 6;
+
+/** Code de récupération : nombre de fiches + graine, par ex. « 30-K7QM2X ». */
+export function makePrintCode(count: number, seed: number): string {
+  let c = '';
+  for (let i = 0, x = seed; i < 6; i++, x = Math.floor(x / CODE_ALPHABET.length)) c = CODE_ALPHABET[x % CODE_ALPHABET.length] + c;
+  return `${count}-${c}`;
+}
+
+export function parsePrintCode(input: string): { count: number; seed: number } | undefined {
+  const m = /^(\d{1,2})([A-Z0-9]{6})$/.exec(String(input ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
+  if (!m) return undefined;
+  const count = Number(m[1]);
+  if (count < 1 || count > BLANK_MAX || [...m[2]].some((ch) => !CODE_ALPHABET.includes(ch))) return undefined;
+  const seed = [...m[2]].reduce((x, ch) => x * CODE_ALPHABET.length + CODE_ALPHABET.indexOf(ch), 0);
+  return { count, seed };
+}
 
 /**
  * Terrain pour imprimer les fiches avant de connaître la maison : des pièces provisoires
  * (Pièce A, Pièce B…) et des postes nommés par lettre (Poste A, Poste B…). Sur place, le MJ
- * renomme simplement les pièces : les postes suivent et les codes imprimés restent valables.
- * On peut en imprimer trop : les fiches non posées se retirent avec removeUnplacedRooms.
+ * renomme les pièces où il a posé une fiche puis retire les autres (removeUnplacedRooms) :
+ * les postes suivent et les codes imprimés restent valables.
+ *
+ * Entièrement déterminé par le code de récupération : ne modifiez pas cette génération, sinon
+ * des fiches déjà imprimées ne correspondraient plus (un test fige le résultat).
  */
-export function blankTerrain(count: number, rng: Rng = cryptoRng): Terrain {
-  const n = Math.max(1, Math.min(25, Math.floor(count) || 1));
-  const names = Array.from({ length: n }, (_, i) => `Pièce ${letter(i)}`);
-  const t = generateTerrain(names.slice(0, BLANK_CORE).map((name) => ({ name })), 0, rng, 'Maison (fiches imprimées à l’avance)');
-  if (n > BLANK_CORE) {
-    const used = new Set(t.stations.map((s) => s.code));
-    for (const name of names.slice(BLANK_CORE)) {
-      const room: Room = { id: newId('r', rng), name, floor: '', forbidden: false, transit: false, hideAllowed: true, notes: '' };
-      t.rooms.push(room);
-      t.stations.push({ id: newId('s', rng), name: `Poste ${name}`, roomId: room.id, kind: 'task', code: uniqueCode(used, rng) });
-    }
-    t.tasks = makeTasks(t.stations.filter((s) => s.kind === 'task'), rng);
-  }
-  for (const s of t.stations) if (s.kind === 'task') s.name = s.name.replace(/^Poste Pièce /, 'Poste ');
-  return t;
-}
+export function blankTerrain(count: number, seed: number = cryptoRng.int(SEED_SPACE)): Terrain {
+  const n = Math.max(1, Math.min(BLANK_MAX, Math.floor(count) || 1));
+  seed = Math.abs(Math.floor(seed)) % SEED_SPACE;
+  const rng = seededRng(seed);
+  const rooms: Room[] = Array.from({ length: n }, (_, i) => ({ id: newId('r', rng), name: `Pièce ${letter(i)}`, floor: '', forbidden: false, transit: false, hideAllowed: true, notes: '' }));
+  const used = new Set<string>();
+  const stations: Station[] = [];
+  const add = (kind: StationKind, room: Room, name: string) => {
+    const st: Station = { id: newId('s', rng), name, roomId: room.id, kind, code: uniqueCode(used, rng) };
+    stations.push(st);
+    return st;
+  };
+  add('emergency', rooms[0], 'Bouton d’urgence');
+  const taskStations = rooms.map((r, i) => add('task', r, `Poste ${letter(i)}`));
+  // postes spéciaux sur B à F (A, la salle de réunion, a le bouton d'urgence) : réacteurs B et D, oxygène C et E
+  const core = rooms.slice(0, BLANK_CORE);
+  const spot = (i: number) => core[core.length > 1 ? 1 + (i % (core.length - 1)) : 0];
+  add('reactor', spot(0), 'Réacteur A');
+  add('oxygen', spot(1), 'Oxygène A');
+  add('reactor', spot(2), 'Réacteur B');
+  add('oxygen', spot(3), 'Oxygène B');
+  add('lights', spot(4), 'Poste Énergie (fictif)');
+  add('comms', spot(5), 'Poste Radio');
+  add('vitals', spot(6), 'Moniteur de vie');
 
-/** Mini-jeu sans papier qui remplace une énigme papier dont la fiche n'a pas été posée. */
-const NO_PAPER: Partial<Record<GameKind, GameKind>> = { count: 'calibrate', assemble: 'order' };
+  const templates = [...TASK_TEMPLATES, ...EXTRA_TEMPLATES];
+  const tasks: TaskDef[] = templates.map((tp) => ({ id: newId('t', rng), name: tp.name, type: tp.type, steps: [], enabled: true, seed: rng.int(2 ** 31) }));
+  const load = new Map(taskStations.map((s) => [s.id, 0]));
+  // d'abord les étapes liées à la fiche, sur A à F ; puis les autres, chacune au poste le moins chargé
+  for (const fixed of [true, false]) {
+    tasks.forEach((k, ti) =>
+      templates[ti].games.forEach((game, gi) => {
+        if (isFixedGame(game) !== fixed) return;
+        const taken = new Set(k.steps.filter(Boolean).map((st) => st.stationId));
+        const pool = fixed ? taskStations.slice(0, BLANK_CORE) : taskStations;
+        const pick = [...pool].sort((x, y) => Number(taken.has(x.id)) - Number(taken.has(y.id)) || load.get(x.id)! - load.get(y.id)!)[0];
+        load.set(pick.id, load.get(pick.id)! + 1);
+        k.steps[gi] = { stationId: pick.id, game };
+      }),
+    );
+  }
+  return { name: 'Ma maison', rooms, stations, tasks, passages: [], meetingRoomId: rooms[0].id, safetyNotes: DEFAULT_SAFETY, printCode: makePrintCode(n, seed) };
+}
 
 /**
  * Sur place : retire les pièces restées au nom provisoire (fiches imprimées en trop, jamais posées)
- * et leurs postes de tâches. Les étapes de tâches qui s'y trouvaient passent sur les postes posés
- * (les moins chargés, dans une autre pièce que les autres étapes de la tâche) ; une énigme papier
- * déplacée devient un mini-jeu sans papier, puisque sa grille est sur la fiche non posée.
- * Les codes des postes conservés ne changent pas.
+ * et leurs postes de tâches, comme s'ils n'avaient jamais existé. Les étapes de tâches qui s'y
+ * trouvaient passent sur les postes posés (les moins chargés, dans une autre pièce que les autres
+ * étapes de la tâche) ; une tâche liée à une fiche non posée (énigme imprimée, croix au sol) est
+ * supprimée. Chaque poste posé garde au moins une tâche. Les codes des postes posés ne changent pas.
  */
 export function removeUnplacedRooms(t: Terrain): Terrain {
   const gone = new Set(t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name)).map((r) => r.id));
   if (!gone.size) return t;
+  const roomName = (id: string) => t.rooms.find((r) => r.id === id)?.name;
   const stuck = t.stations.filter((s) => s.kind !== 'task' && gone.has(s.roomId));
   if (stuck.length)
-    throw new Error(`${stuck.map((s) => `« ${s.name} »`).join(', ')} : fiche rattachée à une pièce provisoire. Indiquez la pièce où elle est posée (liste des postes) ou renommez cette pièce.`);
+    throw new Error(
+      `${stuck.map((s) => `« ${s.name} » (${roomName(s.roomId)})`).join(', ')} : ces fiches spéciales seraient retirées. Les postes A à F sont indispensables : posez-les et renommez leurs pièces, ou indiquez dans la liste des postes la pièce où chaque fiche spéciale est posée.`,
+    );
   const stations = t.stations.filter((s) => !gone.has(s.roomId));
   const kept = stations.filter((s) => s.kind === 'task');
   if (!kept.length) throw new Error('Aucun poste de tâches posé : renommez d’abord les pièces où vous avez posé les fiches.');
   const roomOf = new Map(stations.map((s) => [s.id, s.roomId]));
+  const tasks = t.tasks
+    .filter((k) => !k.steps.some((st) => !roomOf.has(st.stationId) && isFixedGame(st.game)))
+    .map((k) => ({ ...k, steps: k.steps.map((st) => ({ ...st })) }));
   const load = new Map(kept.map((s) => [s.id, 0]));
-  for (const k of t.tasks) for (const st of k.steps) if (load.has(st.stationId)) load.set(st.stationId, load.get(st.stationId)! + 1);
-  const otherRooms = (steps: { stationId: string }[], except: object) => new Set(steps.filter((x) => x !== except && load.has(x.stationId)).map((x) => roomOf.get(x.stationId)));
-
-  const tasks = t.tasks.map((k) => ({ ...k, steps: k.steps.map((st) => ({ ...st })) }));
+  const count = (k: TaskDef, id: string, d: number) => k.enabled && load.set(id, load.get(id)! + d);
+  for (const k of tasks) for (const st of k.steps) if (load.has(st.stationId)) count(k, st.stationId, 1);
+  const roomsOf = (k: TaskDef, except?: object) => new Set(k.steps.filter((x) => x !== except && roomOf.has(x.stationId)).map((x) => roomOf.get(x.stationId)));
   for (const k of tasks) {
     for (const st of k.steps) {
-      if (load.has(st.stationId)) continue;
-      const taken = otherRooms(k.steps, st);
+      if (roomOf.has(st.stationId)) continue;
+      const taken = roomsOf(k, st);
       const pick = [...kept].sort((a, b) => Number(taken.has(a.roomId)) - Number(taken.has(b.roomId)) || load.get(a.id)! - load.get(b.id)!)[0];
       st.stationId = pick.id;
-      load.set(pick.id, load.get(pick.id)! + 1);
-      st.game = NO_PAPER[st.game] ?? st.game;
+      count(k, pick.id, 1);
     }
   }
-  // Un poste posé sans aucune tâche reçoit une étape d'un poste qui en a plusieurs (jamais une énigme papier).
+  // un poste posé sans tâche reçoit une étape d'un poste qui en a plusieurs (jamais une étape liée à sa fiche)
   for (const empty of kept.filter((s) => load.get(s.id) === 0)) {
-    const k = tasks.find((x) => !otherRooms(x.steps, {}).has(empty.roomId) && x.steps.some((st) => load.get(st.stationId)! > 1 && !GAMES[st.game].paper));
-    const st = k?.steps.find((x) => load.get(x.stationId)! > 1 && !GAMES[x.game].paper);
-    if (!st) continue;
-    load.set(st.stationId, load.get(st.stationId)! - 1);
+    const movable = (k: TaskDef, st: TaskDef['steps'][number]) => k.enabled && !isFixedGame(st.game) && load.get(st.stationId)! > 1;
+    const k = tasks.find((x) => !roomsOf(x).has(empty.roomId) && x.steps.some((st) => movable(x, st)));
+    const st = k?.steps.find((x) => movable(k, x));
+    if (!k || !st) continue;
+    count(k, st.stationId, -1);
     st.stationId = empty.id;
-    load.set(empty.id, 1);
+    count(k, empty.id, 1);
   }
   const rooms = t.rooms.filter((r) => !gone.has(r.id));
   const meetingRoomId = gone.has(t.meetingRoomId) ? (stations.find((s) => s.kind === 'emergency')?.roomId ?? rooms.find((r) => !r.forbidden && !r.transit)?.id ?? '') : t.meetingRoomId;
   const passages = t.passages.filter((p) => !gone.has(p.fromRoomId) && !gone.has(p.toRoomId));
   return { ...t, rooms, stations, tasks, passages, meetingRoomId };
+}
+
+/**
+ * Remet toutes les fiches imprimées (code de récupération) : après un retrait trop rapide, ou sur un
+ * nouvel appareil / une nouvelle partie. Si le terrain actuel vient du même code, ce qui a été saisi
+ * sur place est conservé (noms et étages des pièces, pièces ajoutées, pièce de chaque poste, réglages).
+ */
+export function restorePrinted(current: Terrain, code: string | undefined = current.printCode): Terrain {
+  const p = parsePrintCode(code ?? '');
+  if (!p) throw new Error('Code de récupération invalide (exemple : 30-K7QM2X).');
+  const full = blankTerrain(p.count, p.seed);
+  if (current.printCode !== full.printCode) return { ...full, safetyNotes: current.safetyNotes || full.safetyNotes };
+  // pièces actuelles (renommées sur place) + pièces provisoires retirées entre-temps
+  const rooms = [...current.rooms.map((r) => ({ ...r })), ...full.rooms.filter((r) => !current.rooms.some((x) => x.id === r.id)).map((r) => ({ ...r }))];
+  const playable = (id: string) => rooms.some((r) => r.id === id && !r.forbidden && !r.transit);
+  const spare = new Map<string, Room>();
+  const stations = full.stations.map((s) => {
+    const c = current.stations.find((x) => x.id === s.id);
+    if (c && playable(c.roomId)) return { ...s, roomId: c.roomId };
+    if (playable(s.roomId)) return s;
+    // sa pièce d'origine est devenue une zone interdite ou de passage : nouvelle pièce provisoire à son nom d'origine
+    if (!spare.has(s.roomId)) {
+      const r: Room = { ...full.rooms.find((x) => x.id === s.roomId)!, id: newId('r') };
+      spare.set(s.roomId, r);
+      rooms.push(r);
+    }
+    return { ...s, roomId: spare.get(s.roomId)!.id };
+  });
+  const ids = new Set(rooms.map((r) => r.id));
+  return {
+    ...current,
+    rooms,
+    stations,
+    tasks: full.tasks,
+    passages: current.passages.filter((x) => ids.has(x.fromRoomId) && ids.has(x.toRoomId)),
+    meetingRoomId: ids.has(current.meetingRoomId) ? current.meetingRoomId : full.meetingRoomId,
+  };
 }
 
 export function exampleTerrain(rng: Rng = cryptoRng): Terrain {
@@ -300,6 +416,7 @@ export function sanitizeTerrain(input: unknown): Terrain {
     passages,
     meetingRoomId,
     safetyNotes: str(src.safetyNotes, 1500),
+    ...(parsePrintCode(src.printCode) ? { printCode: makePrintCode(parsePrintCode(src.printCode)!.count, parsePrintCode(src.printCode)!.seed) } : {}),
   };
 }
 
@@ -329,6 +446,9 @@ export function startProblems(t: Terrain, s: Settings, playerCount: number): str
   if (n('long') < s.longTasks) p.push(`Pas assez de tâches longues actives (${n('long')} pour ${s.longTasks} demandées).`);
   if (n('short') < s.shortTasks) p.push(`Pas assez de tâches courtes actives (${n('short')} pour ${s.shortTasks} demandées).`);
   if (s.commonTasks + s.longTasks + s.shortTasks === 0) p.push('Chaque joueur doit avoir au moins une tâche.');
+  const provisional = t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name));
+  if (provisional.length)
+    p.push(`Pièces au nom provisoire (${provisional.map((r) => r.name).join(', ')}) : renommez celles où une fiche est posée, puis « Retirer les fiches non posées » (onglet Terrain).`);
   return p;
 }
 
@@ -351,7 +471,5 @@ export function terrainWarnings(t: Terrain): string[] {
   for (const r of t.rooms.filter((x) => !x.forbidden && !x.transit)) {
     if (!t.stations.some((s) => s.roomId === r.id)) w.push(`La pièce « ${r.name} » n’a aucun poste : personne n’aura de raison d’y aller.`);
   }
-  const provisional = t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name));
-  if (provisional.length) w.push(`Pièces au nom provisoire (${provisional.map((r) => r.name).join(', ')}) : renommez-les sur place, sans régénérer les postes (les codes imprimés restent valables).`);
   return w;
 }

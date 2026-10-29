@@ -176,6 +176,7 @@ video.scanner { width: 100%; border-radius: 14px; background: #000; max-height: 
 /* impression */
 @media print {
   @page { margin: 10mm; }
+  html { background: #fff; }
   body { background: #fff; color: #000; font-size: 12pt; }
   .noprint, .toast { display: none !important; }
   .sheet { page-break-after: always; break-after: page; }
@@ -280,3 +281,6 @@ details.collapse[open] > summary::after { transform: rotate(180deg); }
 .offline-banner.waiting { background: var(--warn); color: #241800; display: flex; gap: 10px; align-items: center; justify-content: center; }
 .offline-banner.waiting { z-index: 70; }
 .sheet .count-grid { width: auto; } .sheet .count-grid tbody th { width: 8mm; text-align: center; vertical-align: middle; }
+.sheet .gm-plan { border-collapse: collapse; width: 100%; font-size: 10pt; }
+.sheet .gm-plan td, .sheet .gm-plan th { border: 1px solid #999; padding: 1mm 2mm; text-align: left; }
+.sheet .gm-plan td:last-child { width: 45mm; }

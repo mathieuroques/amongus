@@ -12,6 +12,7 @@ import { joinUrl, QR, stationUrl } from './qr';
 import { useStore } from './store';
 
 const SECTIONS = {
+  gmsheet: 'Fiche du maître du jeu : plan de pose et code de récupération (à garder pour vous)',
   invite: 'Affiche d’invitation',
   stations: 'Fiches des postes de tâches',
   special: 'Fiches bouton d’urgence, sabotages et moniteur',
@@ -24,12 +25,14 @@ type Section = keyof typeof SECTIONS;
 export function PrintPage({ conn }: { conn: Connection<GmView> }) {
   const st = useStore(conn.store);
   const v = st.view;
-  const [on, setOn] = useState<Record<Section, boolean>>({ invite: true, stations: true, special: true, rooms: true, ghosts: true, summary: true });
+  const [on, setOn] = useState<Record<Section, boolean>>({ gmsheet: true, invite: true, stations: true, special: true, rooms: true, ghosts: true, summary: true });
   const [blankChoice, setBlank] = useState<boolean | null>(null);
   if (!v) return <div class="wrap">Connexion…</div>;
   const t = v.terrain;
-  // Par défaut, la pièce reste en blanc quand le terrain a été préparé sans connaître la maison.
+  // Fiches imprimées avant de connaître la maison : rien de ce qui peut changer sur place n'est imprimé
+  // (pièces, tâches de chaque poste, code de la partie, réglages). Cochée d'office tant que les pièces sont provisoires.
   const blank = blankChoice ?? t.rooms.some((r) => PLACEHOLDER_ROOM.test(r.name));
+  const sections = (Object.keys(SECTIONS) as Section[]).filter((k) => k !== 'gmsheet' || t.printCode);
   return (
     <div>
       <div class="wrap noprint stack">
@@ -40,18 +43,18 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
           <h1 class="grow">Impression</h1>
         </div>
         <p>Choisissez les documents puis utilisez « Imprimer » (ou « Enregistrer en PDF »). Les codes restent valables tant que vous ne régénérez pas les postes.</p>
-        {(Object.keys(SECTIONS) as Section[]).map((k) => (
+        {sections.map((k) => (
           <label class="check" key={k}>
             <input type="checkbox" checked={on[k]} onChange={(e) => setOn({ ...on, [k]: (e.target as HTMLInputElement).checked })} /> {SECTIONS[k]}
           </label>
         ))}
         <label class="check">
-          <input type="checkbox" checked={blank} onChange={(e) => setBlank((e.target as HTMLInputElement).checked)} /> Laisser le nom de la pièce en blanc (à écrire à la main une fois sur place)
+          <input type="checkbox" checked={blank} onChange={(e) => setBlank((e.target as HTMLInputElement).checked)} /> Imprimer avant de connaître la maison : pièces à écrire à la main, affiche et aide-mémoire valables quelle que soit la partie et les réglages
         </label>
         {blank && (
           <p class="card warn">
-            Fiches sans lieu : sur place, posez les « Poste A, B… » dans l’ordre des lettres, chacun dans une pièce différente, et chaque fiche spéciale à côté du poste indiqué, puis renommez les pièces dans l’onglet Terrain. Les fiches en trop
-            se retirent ensuite d’un geste (onglet Terrain). Les codes restent valables tant que vous ne cliquez pas sur « Générer automatiquement ».
+            Sur place, suivez la fiche du maître du jeu : posez au moins les postes A à F avec leurs fiches spéciales, renommez dans l’onglet Terrain les pièces où une fiche est posée, puis « Retirer les fiches non posées ». Les fiches non posées
+            n’existent alors plus pour le jeu.
           </p>
         )}
         <button class="btn big primary" onClick={() => window.print()}>
@@ -60,12 +63,13 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
         <p class="muted">Conseil : posez chaque fiche à hauteur des yeux, dans un endroit éclairé et dégagé, jamais dans un escalier.</p>
       </div>
       <div class="printroot">
-        {on.invite && <InviteSheet code={v.code} terrain={t} />}
+        {on.gmsheet && t.printCode && <GmSheet t={t} />}
+        {on.invite && <InviteSheet code={blank ? undefined : v.code} terrain={t} />}
         {on.stations && t.stations.filter((s) => s.kind === 'task').map((s) => <StationSheet key={s.id} s={s} t={t} blank={blank} />)}
         {on.special && t.stations.filter((s) => s.kind !== 'task').map((s) => <SpecialSheet key={s.id} s={s} t={t} blank={blank} />)}
         {on.rooms && <RoomSheets t={t} blank={blank} />}
         {on.ghosts && <GhostSheet />}
-        {on.summary && <SummarySheet v={v} />}
+        {on.summary && <SummarySheet v={v} generic={blank} />}
       </div>
     </div>
   );
@@ -74,19 +78,22 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
 const room = (t: Terrain, id: string) => t.rooms.find((r) => r.id === id);
 const BLANK_LINE = '______________________';
 
-function InviteSheet({ code, terrain }: { code: string; terrain: Terrain }) {
+/** Sans code (impression à l'avance) : l'affiche mène à l'accueil du site, le MJ écrit le code de la partie à la main. */
+function InviteSheet({ code, terrain }: { code?: string; terrain: Terrain }) {
   return (
     <section class="sheet" style={{ textAlign: 'center' }}>
       <h1 style={{ fontSize: '40pt' }}>Rejoignez la partie !</h1>
       <p style={{ fontSize: '16pt' }}>Scannez avec l’appareil photo de votre téléphone</p>
       <div style={{ display: 'flex', justifyContent: 'center', margin: '8mm 0' }}>
-        <QR text={joinUrl(code)} size={340} />
+        <QR text={code ? joinUrl(code) : `${location.origin}/`} size={340} />
       </div>
-      <p style={{ fontSize: '18pt' }}>ou ouvrez <strong>{location.host}</strong> et saisissez le code</p>
+      <p style={{ fontSize: '18pt' }}>
+        ou ouvrez <strong>{location.host}</strong>, touchez « Je rejoins une partie » et saisissez le code{code ? '' : ' de la partie'}
+      </p>
       <div class="scode" style={{ fontSize: '54pt' }}>
-        {code}
+        {code ?? '__________'}
       </div>
-      <p style={{ fontSize: '13pt', marginTop: '10mm' }}>Aucune application à installer · aucun compte · terrain : {terrain.name}</p>
+      <p style={{ fontSize: '13pt', marginTop: '10mm' }}>Aucune application à installer · aucun compte{code ? ` · terrain : ${terrain.name}` : ''}</p>
     </section>
   );
 }
@@ -124,6 +131,11 @@ function StationSheet({ s, t, blank }: { s: Station; t: Terrain; blank: boolean 
             ))}
           </ul>
         </>
+      )}
+      {tasksHere.some((k) => k.steps.some((st) => st.stationId === s.id && st.game === 'scan')) && (
+        <p style={{ border: '2px solid #000', padding: '3mm', marginTop: '4mm' }}>
+          <strong>Scan médical</strong> : tenez-vous immobile sur la croix collée au sol devant cette fiche.
+        </p>
       )}
       {paper.map(({ k, st }) =>
         st.game === 'count' ? <CountBlock key={k.id + 'c'} seed={k.seed} name={k.name} /> : <AssembleBlock key={k.id + 'a'} seed={k.seed} name={k.name} />,
@@ -191,6 +203,54 @@ function AssembleBlock({ seed, name }: { seed: number; name: string }) {
   );
 }
 
+/** Plan de pose des fiches imprimées à l'avance, à garder par le MJ (jamais affiché). */
+function GmSheet({ t }: { t: Terrain }) {
+  const tasks = t.stations.filter((s) => s.kind === 'task');
+  const with_ = (s: Station) => [
+    ...t.stations.filter((x) => x.kind !== 'task' && x.roomId === s.roomId).map((x) => x.name),
+    ...(t.tasks.some((k) => k.enabled && k.steps.some((st) => st.stationId === s.id && st.game === 'scan')) ? ['croix au sol (scan)'] : []),
+    ...(t.tasks.some((k) => k.enabled && k.steps.some((st) => st.stationId === s.id && st.game === 'assemble')) ? ['bandes du puzzle découpées'] : []),
+  ];
+  return (
+    <section class="sheet">
+      <h1>Fiche du maître du jeu</h1>
+      <p>
+        <strong>À garder pour vous, ne pas afficher.</strong> Code de récupération des fiches :
+      </p>
+      <div class="scode">{t.printCode}</div>
+      <p style={{ fontSize: '10.5pt' }}>
+        Si la partie a été effacée (7 jours sans activité) ou si vous changez d’appareil : créez une partie, onglet Terrain → « 🔑 Code de récupération », saisissez ce code : toutes ces fiches fonctionnent à nouveau.
+      </p>
+      <ol style={{ fontSize: '10.5pt' }}>
+        <li>Posez une fiche « Poste » par pièce jouable, jamais dans un escalier. Les postes A à F sont indispensables : la salle de réunion reçoit le Poste A ; éloignez B de D (réacteurs) et C de E (oxygène).</li>
+        <li>Posez chaque fiche spéciale avec son poste (colonne « avec »), puis écrivez le nom de la pièce sur les fiches et dans la dernière colonne.</li>
+        <li>Onglet Terrain : renommez chaque pièce où une fiche est posée (« Pièce A » → « Salon »), étage, escaliers et zones interdites. Puis « Retirer les fiches non posées » et « Enregistrer ». Les fiches non posées n’existent plus pour le jeu.</li>
+        <li>Onglet 🧪 Tests : scannez chaque fiche posée et testez chaque tâche.</li>
+      </ol>
+      <table class="gm-plan">
+        <thead>
+          <tr>
+            <th>Poste</th>
+            <th>Code</th>
+            <th>Avec</th>
+            <th>Pièce</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map((s) => (
+            <tr key={s.id}>
+              <td>{s.name}</td>
+              <td>{s.code}</td>
+              <td>{with_(s).join(', ')}</td>
+              <td />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 const SPECIAL_HELP: Record<string, string> = {
   emergency: 'Pour convoquer une réunion d’urgence : scannez ce poste puis appuyez sur le bouton rouge. Impossible pendant un sabotage.',
   reactor: `${SABOTAGE_INFO.reactor.short} Scannez ce poste puis maintenez le bouton appuyé jusqu’à la réparation.`,
@@ -202,15 +262,11 @@ const SPECIAL_HELP: Record<string, string> = {
 
 function SpecialSheet({ s, t, blank }: { s: Station; t: Terrain; blank: boolean }) {
   const r = room(t, s.roomId);
-  const beside = t.stations.find((x) => x.kind === 'task' && x.roomId === s.roomId);
   return (
     <section class="sheet" style={{ textAlign: 'center' }}>
       <h1 style={{ fontSize: '34pt' }}>{s.name}</h1>
       {blank ? (
-        <>
-          <p style={{ fontSize: '16pt' }}>Pièce : {BLANK_LINE}</p>
-          {beside && <p style={{ fontSize: '12pt' }}>À poser dans la même pièce que la fiche « {beside.name} ».</p>}
-        </>
+        <p style={{ fontSize: '16pt' }}>Pièce : {BLANK_LINE}</p>
       ) : (
         <p style={{ fontSize: '16pt' }}>
           {r?.name} {r?.floor ? `(${r.floor})` : ''}
@@ -231,18 +287,12 @@ function RoomSheets({ t, blank }: { t: Terrain; blank: boolean }) {
     const playable = t.rooms.filter((r) => !r.forbidden && !r.transit);
     return (
       <>
-        {playable.map((r) => {
-          const st = t.stations.find((x) => x.kind === 'task' && x.roomId === r.id);
-          return (
-            <section class="sheet" key={r.id}>
-              <p style={{ textAlign: 'center', fontSize: '14pt', marginTop: '25mm' }}>Nom de la pièce :</p>
-              <div class="bigname" style={{ marginTop: '4mm' }}>{BLANK_LINE}</div>
-              <p style={{ textAlign: 'center', fontSize: '16pt' }}>
-                {r.id === t.meetingRoomId ? 'SALLE DE RÉUNION · ' : ''}pièce du « {st?.name ?? r.name} »
-              </p>
-            </section>
-          );
-        })}
+        {playable.map((r) => (
+          <section class="sheet" key={r.id}>
+            <p style={{ textAlign: 'center', fontSize: '14pt', marginTop: '25mm' }}>Nom de la pièce :</p>
+            <div class="bigname" style={{ marginTop: '4mm' }}>{BLANK_LINE}</div>
+          </section>
+        ))}
         {[0, 1].map((i) => (
           <section class="sheet" key={'f' + i}>
             <div class="bigname" style={{ color: '#c00' }}>
@@ -307,7 +357,8 @@ function GhostSheet() {
   );
 }
 
-function SummarySheet({ v }: { v: GmView }) {
+/** generic : imprimé à l'avance, sans les réglages (nombre d'imposteurs, délais) que le MJ ajustera sur place. */
+function SummarySheet({ v, generic }: { v: GmView; generic: boolean }) {
   const s = v.settings;
   return (
     <section class="sheet">
@@ -317,25 +368,34 @@ function SummarySheet({ v }: { v: GmView }) {
           <strong>Équipage</strong> : faire ses tâches aux postes (scanner le QR code), démasquer les imposteurs. Victoire : toutes les tâches faites ou tous les imposteurs éjectés.
         </li>
         <li>
-          <strong>Imposteurs ({s.impostors})</strong> : éliminer et saboter sans être démasqués. Victoire : autant d’imposteurs que d’équipiers vivants, ou sabotage critique non réparé.
+          <strong>Imposteurs{generic ? '' : ` (${s.impostors})`}</strong> : éliminer et saboter sans être démasqués. Victoire : autant d’imposteurs que d’équipiers vivants, ou sabotage critique non réparé.
         </li>
         <li>
-          <strong>Élimination</strong> : l’imposteur touche l’épaule (ou se place à portée de bras) puis choisit le pseudonyme de sa victime sur son téléphone ; la victime n’a rien à saisir et peut contester auprès du MJ. Délai : {s.killCooldownSec} s (premier : {s.initialKillCooldownSec} s). Jamais dans un escalier ou un passage.
+          <strong>Élimination</strong> : l’imposteur touche l’épaule (ou se place à portée de bras) puis choisit le pseudonyme de sa victime sur son téléphone ; la victime n’a rien à saisir et peut contester auprès du MJ. {generic ? 'Un délai fixé par le MJ sépare deux éliminations.' : `Délai : ${s.killCooldownSec} s (premier : ${s.initialKillCooldownSec} s).`} Jamais dans un escalier ou un passage.
         </li>
         <li>
           <strong>Corps</strong> : la victime s’assoit sur place, silencieuse, téléphone montrant son code de corps en très gros et un QR code. Celui qui la trouve scanne ce QR code (onglet Poste) ou tape le code (onglet Urgence) → réunion.
         </li>
         <li>
-          <strong>Réunion d’urgence</strong> : au bouton d’urgence ({s.emergencyMeetingsPerPlayer} par joueur, impossible pendant un sabotage).
+          <strong>Réunion d’urgence</strong> : au bouton d’urgence ({generic ? 'nombre par joueur fixé par le MJ' : `${s.emergencyMeetingsPerPlayer} par joueur`}, impossible pendant un sabotage).
         </li>
         <li>
-          <strong>Réunion</strong> : rassemblement ({s.gatherSec} s, 15 s de plus seulement une fois la majorité arrivée), discussion ({s.discussionSec} s, ou moins si la majorité touche « Prêt à voter »), vote ({s.votingSec} s). Vote pour un joueur ou « passer ». Égalité ou « passer » majoritaire : personne n’est éjecté. {s.confirmEjects ? 'Le rôle de l’éjecté est annoncé.' : 'Le rôle de l’éjecté n’est pas annoncé.'} {s.anonymousVotes ? 'Votes anonymes.' : 'Votes visibles après le décompte.'}
+          {generic ? (
+            <>
+              <strong>Réunion</strong> : rassemblement (15 s de plus seulement une fois la majorité arrivée), discussion (plus courte si la majorité touche « Prêt à voter »), puis vote ; les durées s’affichent sur le téléphone. Vote pour un joueur ou « passer ». Égalité ou « passer »
+              majoritaire : personne n’est éjecté. Le MJ annonce si le rôle de l’éjecté est révélé et si les votes sont anonymes.
+            </>
+          ) : (
+            <>
+              <strong>Réunion</strong> : rassemblement ({s.gatherSec} s, 15 s de plus seulement une fois la majorité arrivée), discussion ({s.discussionSec} s, ou moins si la majorité touche « Prêt à voter »), vote ({s.votingSec} s). Vote pour un joueur ou « passer ». Égalité ou « passer » majoritaire : personne n’est éjecté. {s.confirmEjects ? 'Le rôle de l’éjecté est annoncé.' : 'Le rôle de l’éjecté n’est pas annoncé.'} {s.anonymousVotes ? 'Votes anonymes.' : 'Votes visibles après le décompte.'}
+            </>
+          )}
         </li>
         <li>
           <strong>Fantômes</strong> : silence total avec les vivants, badge visible dès l’annonce de la mort. L’équipage fantôme finit ses tâches ; l’imposteur fantôme peut saboter. Pas de vote, pas de signalement, pas de réparation.
         </li>
         <li>
-          <strong>Sabotages</strong> : réacteur ({s.reactorSec} s, 2 personnes en même temps), oxygène ({s.oxygenSec} s, 2 postes), panne de courant (impossible de signaler un corps), communications (liste des tâches masquée).
+          <strong>Sabotages</strong> : réacteur ({generic ? 'compte à rebours sur le téléphone' : `${s.reactorSec} s`}, 2 personnes en même temps), oxygène ({generic ? 'compte à rebours' : `${s.oxygenSec} s`}, 2 postes), panne de courant (impossible de signaler un corps), communications (liste des tâches masquée).
         </li>
         <li>
           <strong>Sécurité</strong> : on ne court jamais, aucune porte verrouillée, zones interdites respectées, aucun contact brusque. Bouton « Alerte sécurité » dans l’onglet Urgence. Le maître du jeu peut tout arrêter.

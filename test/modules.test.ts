@@ -9,7 +9,7 @@ import {
 } from '../src/shared/puzzles';
 import { CODE_ALPHABET, cryptoRng, normalizeCode, randomCode, randomDigits, seededRng, sha256, shuffle } from '../src/shared/rng';
 import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors, sanitizeSettings, SETTING_BOUNDS } from '../src/shared/settings';
-import { availableSabotages, BLANK_CORE, blankTerrain, EXAMPLE_ROOMS, exampleTerrain, generateTerrain, removeUnplacedRooms, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
+import { availableSabotages, EXAMPLE_ROOMS, exampleTerrain, generateTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
 import type { FixKind, GameKind } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
@@ -198,59 +198,6 @@ describe('terrain', () => {
       for (const k of t.tasks) for (const st of k.steps) expect(t.stations.find((s) => s.id === st.stationId)?.kind).toBe('task');
     }
     expect(() => generateTerrain([{ name: 'A', forbidden: true }])).toThrow();
-  });
-  it('fiches imprimées sans connaître la maison : renommer les pièces garde les codes et reste jouable', () => {
-    const t = blankTerrain(8, seededRng(3));
-    expect(t.rooms.map((r) => r.name)).toEqual(['Pièce A', 'Pièce B', 'Pièce C', 'Pièce D', 'Pièce E', 'Pièce F', 'Pièce G', 'Pièce H']);
-    expect(t.stations.filter((s) => s.kind === 'task').map((s) => s.name)).toEqual(['Poste A', 'Poste B', 'Poste C', 'Poste D', 'Poste E', 'Poste F', 'Poste G', 'Poste H']);
-    expect(availableSabotages(t)).toEqual(['reactor', 'oxygen', 'lights', 'comms']);
-    expect(terrainWarnings(t).some((w) => w.includes('nom provisoire'))).toBe(true);
-    // sur place : on renomme, on ajoute l'escalier et une zone interdite
-    const named = ['Salon', 'Cuisine', 'Bureau', 'Chambre 1', 'Chambre 2', 'Salle de jeux', 'Buanderie', 'Salle de bain'];
-    const onSite = {
-      ...t,
-      rooms: [
-        ...t.rooms.map((r, i) => ({ ...r, name: named[i], floor: i < 3 ? 'RDC' : 'Étage' })),
-        { id: 'rstairs', name: 'Escalier', floor: '', forbidden: false, transit: true, hideAllowed: false, notes: '' },
-        { id: 'rparents', name: 'Chambre parentale', floor: 'Étage', forbidden: true, transit: false, hideAllowed: false, notes: '' },
-      ],
-    };
-    const out = sanitizeTerrain(JSON.parse(JSON.stringify(onSite)));
-    expect(out.stations.map((s) => s.code)).toEqual(t.stations.map((s) => s.code));
-    expect(terrainWarnings(out)).toEqual([]);
-    expect(startProblems(out, DEFAULT_SETTINGS, 10)).toEqual([]);
-    expect(blankTerrain(30).rooms).toHaveLength(25);
-  });
-  it('fiches imprimées en trop : les postes non posés se retirent, les tâches passent sur les postes posés', () => {
-    for (let seed = 1; seed <= 30; seed++) {
-      const printed = blankTerrain(20, seededRng(seed));
-      const roomName = (id: string) => printed.rooms.find((r) => r.id === id)!.name;
-      // les postes spéciaux sont tous dans les pièces A à F, posées en premier
-      for (const s of printed.stations.filter((x) => x.kind !== 'task')) expect(['A', 'B', 'C', 'D', 'E', 'F']).toContain(roomName(s.roomId).slice(-1));
-      expect(BLANK_CORE).toBe(6);
-      for (const used of [1, 3, 6, 10, 19]) {
-        // sur place : seules les « used » premières fiches sont posées et leurs pièces renommées
-        const onSite = { ...printed, rooms: printed.rooms.map((r, i) => (i < used ? { ...r, name: `Vraie pièce ${i + 1}`, floor: i % 2 ? 'Étage' : 'RDC' } : r)) };
-        if (used < BLANK_CORE) {
-          expect(() => removeUnplacedRooms(onSite)).toThrow(/pièce provisoire/);
-          continue;
-        }
-        const out = sanitizeTerrain(JSON.parse(JSON.stringify(removeUnplacedRooms(onSite))));
-        expect(out.rooms).toHaveLength(used);
-        const kept = printed.stations.filter((s) => out.rooms.some((r) => r.id === s.roomId));
-        expect(out.stations).toEqual(kept); // mêmes postes, mêmes codes
-        expect(startProblems(out, DEFAULT_SETTINGS, 10)).toEqual([]);
-        expect(availableSabotages(out)).toEqual(['reactor', 'oxygen', 'lights', 'comms']);
-        expect(terrainWarnings(out)).toEqual([]); // chaque poste posé a une tâche, aucune tâche longue dans une seule pièce
-        // une énigme papier reste sur la fiche où elle est imprimée
-        for (const k of out.tasks)
-          k.steps.forEach((st, i) => {
-            if (st.game === 'count' || st.game === 'assemble') expect(printed.tasks.find((x) => x.id === k.id)!.steps[i]).toEqual(st);
-          });
-      }
-    }
-    const t = blankTerrain(8, seededRng(1));
-    expect(removeUnplacedRooms({ ...t, rooms: t.rooms.map((r) => ({ ...r, name: 'X' + r.name })) }).rooms).toHaveLength(8);
   });
   it('aucun poste dans une zone interdite ou de passage', () => {
     const t = generateTerrain(EXAMPLE_ROOMS, 0, seededRng(9));

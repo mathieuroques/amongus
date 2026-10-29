@@ -6,8 +6,8 @@ import {
   addPlayer, aliveCrew, aliveImpostors, createGame, GameError, gmAction, nextWakeup, playerAction, readyCount, taskProgress, tick, type GmAction, type PlayerAction,
 } from '../src/shared/engine';
 import { seededRng, type Rng } from '../src/shared/rng';
-import { exampleTerrain } from '../src/shared/terrain';
-import type { GameState, SabotageKind } from '../src/shared/types';
+import { BLANK_CORE, blankTerrain, exampleTerrain, removeUnplacedRooms } from '../src/shared/terrain';
+import type { GameState, SabotageKind, Terrain } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
 const SAB: SabotageKind[] = ['reactor', 'oxygen', 'lights', 'comms'];
@@ -159,7 +159,7 @@ function gmMove(s: GameState, r: Rng): GmAction {
   return moves[r.int(moves.length)];
 }
 
-function simulate(seed: number, n: number, steps: number) {
+function simulate(seed: number, n: number, steps: number, terrain: Terrain = exampleTerrain(seededRng(seed + 1))) {
   const r = seededRng(seed);
   let now = 1_000_000;
   const ctx = () => ({ now, rng: r });
@@ -186,7 +186,7 @@ function simulate(seed: number, n: number, steps: number) {
     commonTasks: r.int(3),
     longTasks: r.int(3),
     shortTasks: 1 + r.int(4),
-  }, exampleTerrain(seededRng(seed + 1)));
+  }, terrain);
   for (let i = 0; i < n; i++) addPlayer(s, `Joueur ${i + 1}`, `t${i}`, now);
   gmAction(s, { type: 'start' }, ctx());
   const outcomes: string[] = [];
@@ -265,4 +265,27 @@ describe(`simulation aléatoire du moteur (${GAMES} séries de parties, 4 à 40 
     expect(stats.sabotageCritique).toBeGreaterThan(0);
     expect(refused).toBeGreaterThan(GAMES * 20); // beaucoup d'actions invalides, toutes refusées proprement
   });
+});
+
+/** Fiches imprimées à l'avance : une partie seulement est posée, les pièces renommées, le reste retiré. */
+function printedTerrain(seed: number): Terrain {
+  const r = seededRng(seed);
+  const n = 10 + r.int(31);
+  const printed = blankTerrain(n, r.int(31 ** 6));
+  const posted = BLANK_CORE + r.int(n - BLANK_CORE + 1);
+  return removeUnplacedRooms({ ...printed, rooms: printed.rooms.map((x, i) => (i < posted ? { ...x, name: `Salle ${i + 1}`, floor: i % 2 ? 'Étage' : 'RDC' } : x)) });
+}
+
+describe('simulation aléatoire sur des terrains issus de fiches imprimées à l’avance', () => {
+  for (let b = 0; b < 3; b++) {
+    it(`séries ${b * BATCH + 1} à ${(b + 1) * BATCH}`, async () => {
+      for (let seed = 1000 + b * BATCH; seed < 1000 + (b + 1) * BATCH; seed++) {
+        const terrain = printedTerrain(seed);
+        const res = simulate(seed, 4 + (seed % 37), 900, terrain);
+        expect(res.outcomes.length).toBeGreaterThan(0);
+        for (const k of res.state.terrain.tasks) for (const st of k.steps) expect(terrain.stations.some((x) => x.id === st.stationId)).toBe(true);
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }, 120_000);
+  }
 });
