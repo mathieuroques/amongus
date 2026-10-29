@@ -18,7 +18,7 @@ Un site web gratuit pour jouer à un jeu de rôles cachés **inspiré d’Among 
 
 1. **Mettre le site en ligne une fois pour toutes** (section 3 ; 10 minutes, gratuit). Vous obtenez une adresse du type `https://imposteurs.votre-nom.workers.dev`.
 2. Ouvrez cette adresse → **Maître du jeu** → **Créer une nouvelle partie**. Notez le **code maître du jeu** affiché.
-3. Onglet **Terrain** : saisissez vos pièces (cochez *Interdite* ou *Passage* pour les escaliers/couloirs), cliquez **Générer postes et tâches automatiquement**, puis **Enregistrer le terrain**.
+3. Onglet **Terrain** (vous ne connaissez pas encore la maison ? bouton **📄 Imprimer avant de connaître la maison**, puis renommez les pièces sur place : voir [Installer la maison](docs/installation-terrain.md)) : saisissez vos pièces (cochez *Interdite* ou *Passage* pour les escaliers/couloirs), cliquez **Générer postes et tâches automatiquement**, puis **Enregistrer le terrain**.
 4. Onglet **Paramètres** : choisissez le nombre d’imposteurs (un conseil s’affiche) et **Enregistrer**.
 5. **Imprimer** : imprimez les fiches, collez-les dans les pièces (jamais dans un escalier). Onglet **🧪 Tests** : scannez chaque fiche posée et testez chaque tâche (une coche ✅ par tâche).
 6. Le jour J : affichez l’**affiche d’invitation** (ou partagez le lien). Les joueurs scannent, choisissent un pseudonyme, arrivent dans le salon.

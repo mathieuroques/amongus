@@ -4,6 +4,7 @@
 import { useState } from 'preact/hooks';
 import { GAMES, SABOTAGE_INFO } from '../shared/catalog';
 import { assemblePuzzle, countPuzzle, ROW_LABELS } from '../shared/puzzles';
+import { PLACEHOLDER_ROOM } from '../shared/terrain';
 import type { Station, Terrain } from '../shared/types';
 import type { GmView } from '../shared/view';
 import type { Connection } from './net';
@@ -24,8 +25,11 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
   const st = useStore(conn.store);
   const v = st.view;
   const [on, setOn] = useState<Record<Section, boolean>>({ invite: true, stations: true, special: true, rooms: true, ghosts: true, summary: true });
+  const [blankChoice, setBlank] = useState<boolean | null>(null);
   if (!v) return <div class="wrap">Connexion…</div>;
   const t = v.terrain;
+  // Par défaut, la pièce reste en blanc quand le terrain a été préparé sans connaître la maison.
+  const blank = blankChoice ?? t.rooms.some((r) => PLACEHOLDER_ROOM.test(r.name));
   return (
     <div>
       <div class="wrap noprint stack">
@@ -41,6 +45,15 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
             <input type="checkbox" checked={on[k]} onChange={(e) => setOn({ ...on, [k]: (e.target as HTMLInputElement).checked })} /> {SECTIONS[k]}
           </label>
         ))}
+        <label class="check">
+          <input type="checkbox" checked={blank} onChange={(e) => setBlank((e.target as HTMLInputElement).checked)} /> Laisser le nom de la pièce en blanc (à écrire à la main une fois sur place)
+        </label>
+        {blank && (
+          <p class="card warn">
+            Fiches sans lieu : sur place, posez chaque « Poste A, B… » dans une pièce différente et chaque fiche spéciale à côté du poste indiqué, puis renommez les pièces dans l’onglet Terrain. Les codes restent valables tant que vous ne
+            cliquez pas sur « Générer automatiquement ».
+          </p>
+        )}
         <button class="btn big primary" onClick={() => window.print()}>
           🖨 Imprimer
         </button>
@@ -48,9 +61,9 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
       </div>
       <div class="printroot">
         {on.invite && <InviteSheet code={v.code} terrain={t} />}
-        {on.stations && t.stations.filter((s) => s.kind === 'task').map((s) => <StationSheet key={s.id} s={s} t={t} />)}
-        {on.special && t.stations.filter((s) => s.kind !== 'task').map((s) => <SpecialSheet key={s.id} s={s} t={t} />)}
-        {on.rooms && <RoomSheets t={t} />}
+        {on.stations && t.stations.filter((s) => s.kind === 'task').map((s) => <StationSheet key={s.id} s={s} t={t} blank={blank} />)}
+        {on.special && t.stations.filter((s) => s.kind !== 'task').map((s) => <SpecialSheet key={s.id} s={s} t={t} blank={blank} />)}
+        {on.rooms && <RoomSheets t={t} blank={blank} />}
         {on.ghosts && <GhostSheet />}
         {on.summary && <SummarySheet v={v} />}
       </div>
@@ -59,6 +72,7 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
 }
 
 const room = (t: Terrain, id: string) => t.rooms.find((r) => r.id === id);
+const BLANK_LINE = '______________________';
 
 function InviteSheet({ code, terrain }: { code: string; terrain: Terrain }) {
   return (
@@ -77,7 +91,7 @@ function InviteSheet({ code, terrain }: { code: string; terrain: Terrain }) {
   );
 }
 
-function StationSheet({ s, t }: { s: Station; t: Terrain }) {
+function StationSheet({ s, t, blank }: { s: Station; t: Terrain; blank: boolean }) {
   const r = room(t, s.roomId);
   const tasksHere = t.tasks.filter((k) => k.enabled && k.steps.some((st) => st.stationId === s.id));
   const paper = tasksHere.flatMap((k) => k.steps.map((st, i) => ({ k, st, i })).filter((x) => x.st.stationId === s.id && GAMES[x.st.game].paper));
@@ -88,7 +102,7 @@ function StationSheet({ s, t }: { s: Station; t: Terrain }) {
         <div>
           <h1>{s.name}</h1>
           <p style={{ fontSize: '16pt' }}>
-            Pièce : <strong>{r?.name}</strong> {r?.floor ? `(${r.floor})` : ''}
+            Pièce : {blank ? BLANK_LINE : <><strong>{r?.name}</strong> {r?.floor ? `(${r.floor})` : ''}</>}
           </p>
           <p>Code du poste :</p>
           <div class="scode">{s.code}</div>
@@ -179,14 +193,22 @@ const SPECIAL_HELP: Record<string, string> = {
   vitals: 'Moniteur de vie : scannez ce poste pour voir qui est vivant ou mort (indisponible quand les communications sont coupées).',
 };
 
-function SpecialSheet({ s, t }: { s: Station; t: Terrain }) {
+function SpecialSheet({ s, t, blank }: { s: Station; t: Terrain; blank: boolean }) {
   const r = room(t, s.roomId);
+  const beside = t.stations.find((x) => x.kind === 'task' && x.roomId === s.roomId);
   return (
     <section class="sheet" style={{ textAlign: 'center' }}>
       <h1 style={{ fontSize: '34pt' }}>{s.name}</h1>
-      <p style={{ fontSize: '16pt' }}>
-        {r?.name} {r?.floor ? `(${r.floor})` : ''}
-      </p>
+      {blank ? (
+        <>
+          <p style={{ fontSize: '16pt' }}>Pièce : {BLANK_LINE}</p>
+          {beside && <p style={{ fontSize: '12pt' }}>À poser dans la même pièce que la fiche « {beside.name} ».</p>}
+        </>
+      ) : (
+        <p style={{ fontSize: '16pt' }}>
+          {r?.name} {r?.floor ? `(${r.floor})` : ''}
+        </p>
+      )}
       <div style={{ display: 'flex', justifyContent: 'center', margin: '6mm 0' }}>
         <QR text={stationUrl(s.code)} size={300} />
       </div>
@@ -196,7 +218,41 @@ function SpecialSheet({ s, t }: { s: Station; t: Terrain }) {
   );
 }
 
-function RoomSheets({ t }: { t: Terrain }) {
+function RoomSheets({ t, blank }: { t: Terrain; blank: boolean }) {
+  if (blank) {
+    // Pièces encore inconnues : étiquettes à compléter à la main et panneaux génériques.
+    const playable = t.rooms.filter((r) => !r.forbidden && !r.transit);
+    return (
+      <>
+        {playable.map((r) => {
+          const st = t.stations.find((x) => x.kind === 'task' && x.roomId === r.id);
+          return (
+            <section class="sheet" key={r.id}>
+              <p style={{ textAlign: 'center', fontSize: '14pt', marginTop: '25mm' }}>Nom de la pièce :</p>
+              <div class="bigname" style={{ marginTop: '4mm' }}>{BLANK_LINE}</div>
+              <p style={{ textAlign: 'center', fontSize: '16pt' }}>
+                {r.id === t.meetingRoomId ? 'SALLE DE RÉUNION · ' : ''}pièce du « {st?.name ?? r.name} »
+              </p>
+            </section>
+          );
+        })}
+        {[0, 1].map((i) => (
+          <section class="sheet" key={'f' + i}>
+            <div class="bigname" style={{ color: '#c00' }}>
+              ⛔ ZONE INTERDITE
+            </div>
+            <p style={{ textAlign: 'center', fontSize: '22pt' }}>Personne n’entre, même pour se cacher ou poursuivre quelqu’un.</p>
+          </section>
+        ))}
+        {[0, 1].map((i) => (
+          <section class="sheet" key={'p' + i}>
+            <div class="bigname">⚠️ Zone de passage</div>
+            <p style={{ textAlign: 'center', fontSize: '20pt' }}>On marche, on ne court pas, on ne s’arrête pas. Aucune élimination ici.</p>
+          </section>
+        ))}
+      </>
+    );
+  }
   return (
     <>
       {t.rooms.map((r) => (

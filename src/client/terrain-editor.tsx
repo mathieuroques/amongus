@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { GAMES, STATION_KIND_LABEL, TASK_TYPE_LABEL } from '../shared/catalog';
 import { CODE_ALPHABET, randomCode } from '../shared/rng';
-import { EXAMPLE_ROOMS, generateTerrain, newId } from '../shared/terrain';
+import { blankTerrain, EXAMPLE_ROOMS, generateTerrain, newId, PLACEHOLDER_ROOM } from '../shared/terrain';
 import type { GameKind, StationKind, TaskType, Terrain } from '../shared/types';
 import type { GmView } from '../shared/view';
 import type { Connection } from './net';
@@ -136,7 +136,27 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
             >
               Charger l’exemple
             </button>
+            <button
+              class="btn small"
+              onClick={() => {
+                const n = Number(prompt('Imprimer sans connaître la maison : combien de pièces jouables pensez-vous avoir (avec un poste chacune) ? Il est sans danger d’en prévoir une ou deux de trop.', '8'));
+                if (!n || n < 1) return;
+                const g = blankTerrain(n);
+                g.safetyNotes = t.safetyNotes;
+                setT(g);
+                setDirty(true);
+                toast('Pièces provisoires créées : enregistrez, puis imprimez. Sur place, renommez les pièces.', 'info');
+              }}
+            >
+              📄 Imprimer avant de connaître la maison
+            </button>
           </div>
+          {t.rooms.some((r) => PLACEHOLDER_ROOM.test(r.name)) && (
+            <p class="card warn">
+              Pièces provisoires : posez chaque « Poste A, B… » dans une pièce différente (les fiches spéciales indiquent à côté de quel poste les mettre), puis renommez ici « Pièce A » en « Cuisine », etc., indiquez l’étage et ajoutez escaliers et zones interdites. Ne cliquez <strong>pas</strong> sur « Générer
+              automatiquement » : les codes changeraient. Une fiche posée ailleurs ? Changez la pièce du poste dans la liste ci-dessous. Plus de fiches que de pièces ? Mettez deux postes dans une grande pièce (changez la pièce du poste, puis supprimez la pièce provisoire restée vide).
+            </p>
+          )}
         </div>
 
         <div class="card stack">

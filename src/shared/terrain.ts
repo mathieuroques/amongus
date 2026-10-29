@@ -133,6 +133,23 @@ export function generateTerrain(seeds: RoomSeed[], meetingIndex = 0, rng: Rng = 
   return { name, rooms, stations, tasks, passages: [], meetingRoomId: meeting.id, safetyNotes: DEFAULT_SAFETY };
 }
 
+/** Nom provisoire d'une pièce créée par blankTerrain (« Pièce A », « Pièce B »…). */
+export const PLACEHOLDER_ROOM = /^Pièce [A-Z]{1,2}$/;
+
+const letter = (i: number) => (i < 26 ? '' : String.fromCharCode(64 + Math.floor(i / 26))) + String.fromCharCode(65 + (i % 26));
+
+/**
+ * Terrain pour imprimer les fiches avant de connaître la maison : des pièces provisoires
+ * (Pièce A, Pièce B…) et des postes nommés par lettre (Poste A, Poste B…). Sur place, le MJ
+ * renomme simplement les pièces : les postes suivent et les codes imprimés restent valables.
+ */
+export function blankTerrain(count: number, rng: Rng = cryptoRng): Terrain {
+  const n = Math.max(1, Math.min(25, Math.floor(count) || 1));
+  const t = generateTerrain(Array.from({ length: n }, (_, i) => ({ name: `Pièce ${letter(i)}` })), 0, rng, 'Maison (fiches imprimées à l’avance)');
+  for (const s of t.stations) if (s.kind === 'task') s.name = s.name.replace(/^Poste Pièce /, 'Poste ');
+  return t;
+}
+
 export function exampleTerrain(rng: Rng = cryptoRng): Terrain {
   // Pas de « conduit » par défaut : seul le MJ sait si sa maison offre un second itinéraire sûr.
   return generateTerrain(EXAMPLE_ROOMS, 0, rng, 'Maison d\u2019exemple');
@@ -264,5 +281,7 @@ export function terrainWarnings(t: Terrain): string[] {
   for (const r of t.rooms.filter((x) => !x.forbidden && !x.transit)) {
     if (!t.stations.some((s) => s.roomId === r.id)) w.push(`La pièce « ${r.name} » n’a aucun poste : personne n’aura de raison d’y aller.`);
   }
+  const provisional = t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name));
+  if (provisional.length) w.push(`Pièces au nom provisoire (${provisional.map((r) => r.name).join(', ')}) : renommez-les sur place, sans régénérer les postes (les codes imprimés restent valables).`);
   return w;
 }

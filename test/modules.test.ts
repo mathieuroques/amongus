@@ -9,7 +9,7 @@ import {
 } from '../src/shared/puzzles';
 import { CODE_ALPHABET, cryptoRng, normalizeCode, randomCode, randomDigits, seededRng, sha256, shuffle } from '../src/shared/rng';
 import { DEFAULT_SETTINGS, maxImpostorsFor, recommendedImpostors, sanitizeSettings, SETTING_BOUNDS } from '../src/shared/settings';
-import { availableSabotages, EXAMPLE_ROOMS, exampleTerrain, generateTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
+import { availableSabotages, blankTerrain, EXAMPLE_ROOMS, exampleTerrain, generateTerrain, sanitizeTerrain, startProblems, terrainWarnings } from '../src/shared/terrain';
 import type { FixKind, GameKind } from '../src/shared/types';
 import { viewForGm, viewForPlayer } from '../src/shared/view';
 
@@ -198,6 +198,28 @@ describe('terrain', () => {
       for (const k of t.tasks) for (const st of k.steps) expect(t.stations.find((s) => s.id === st.stationId)?.kind).toBe('task');
     }
     expect(() => generateTerrain([{ name: 'A', forbidden: true }])).toThrow();
+  });
+  it('fiches imprimées sans connaître la maison : renommer les pièces garde les codes et reste jouable', () => {
+    const t = blankTerrain(8, seededRng(3));
+    expect(t.rooms.map((r) => r.name)).toEqual(['Pièce A', 'Pièce B', 'Pièce C', 'Pièce D', 'Pièce E', 'Pièce F', 'Pièce G', 'Pièce H']);
+    expect(t.stations.filter((s) => s.kind === 'task').map((s) => s.name)).toEqual(['Poste A', 'Poste B', 'Poste C', 'Poste D', 'Poste E', 'Poste F', 'Poste G', 'Poste H']);
+    expect(availableSabotages(t)).toEqual(['reactor', 'oxygen', 'lights', 'comms']);
+    expect(terrainWarnings(t).some((w) => w.includes('nom provisoire'))).toBe(true);
+    // sur place : on renomme, on ajoute l'escalier et une zone interdite
+    const named = ['Salon', 'Cuisine', 'Bureau', 'Chambre 1', 'Chambre 2', 'Salle de jeux', 'Buanderie', 'Salle de bain'];
+    const onSite = {
+      ...t,
+      rooms: [
+        ...t.rooms.map((r, i) => ({ ...r, name: named[i], floor: i < 3 ? 'RDC' : 'Étage' })),
+        { id: 'rstairs', name: 'Escalier', floor: '', forbidden: false, transit: true, hideAllowed: false, notes: '' },
+        { id: 'rparents', name: 'Chambre parentale', floor: 'Étage', forbidden: true, transit: false, hideAllowed: false, notes: '' },
+      ],
+    };
+    const out = sanitizeTerrain(JSON.parse(JSON.stringify(onSite)));
+    expect(out.stations.map((s) => s.code)).toEqual(t.stations.map((s) => s.code));
+    expect(terrainWarnings(out)).toEqual([]);
+    expect(startProblems(out, DEFAULT_SETTINGS, 10)).toEqual([]);
+    expect(blankTerrain(30).rooms).toHaveLength(25);
   });
   it('aucun poste dans une zone interdite ou de passage', () => {
     const t = generateTerrain(EXAMPLE_ROOMS, 0, seededRng(9));

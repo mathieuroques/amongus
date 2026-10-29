@@ -10,6 +10,7 @@ Le MJ ne joue pas : il prépare, présente la sécurité, surveille et arbitre. 
 ## 2. Préparer le terrain (onglet Terrain)
 - **Pièces** : nom, étage, *Interdite*, *Passage* (escalier/couloir : pas de poste, pas d’élimination), *Cachette* autorisée, notes.
 - **Générer postes et tâches automatiquement** : crée un poste de tâches par pièce jouable, le bouton d’urgence dans la salle de réunion, 2 postes Réacteur, 2 postes Oxygène, Énergie, Radio, Moniteur de vie, et 15 tâches. Vous pouvez tout modifier ensuite.
+- **Imprimer avant de connaître la maison** : crée des pièces provisoires (« Pièce A », « Pièce B »…) et des postes nommés par lettre. Imprimez chez vous, puis sur place renommez les pièces : les postes suivent et les codes ne changent pas (détails dans [Installer la maison](installation-terrain.md)).
 - **Postes** : nom, pièce, type ; chaque poste a un code imprimé. « ↻ » change le code (il faut alors réimprimer la fiche).
 - **Tâches** : nom, type (commune / longue / courte), active ou non, étapes (poste + mini-jeu). Une tâche longue doit avoir ses étapes dans des pièces différentes.
 - **Conduits** (facultatif, aucun par défaut) : itinéraires sûrs réservés aux imposteurs. Ne les activez que si la maison offre un second chemin éclairé et sans marche.
@@ -34,7 +35,7 @@ Nombre d’imposteurs (conseil affiché selon le nombre de joueurs ; ils doivent
 Prévoyez au moins 1,5 poste de tâches par tranche de 4 joueurs pour éviter les embouteillages.
 
 ## 4. Imprimer (bouton Imprimer)
-Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papier), fiches spéciales (bouton d’urgence, réacteur, oxygène, énergie, radio, moniteur), étiquettes des pièces et panneaux « zone interdite » / « passage », badges fantômes, aide-mémoire. « Imprimer » → imprimante ou « Enregistrer en PDF ». Les codes restent valables d’une partie à l’autre tant que vous ne les régénérez pas.
+Affiche d’invitation (QR + code), fiches des postes (QR + code + énigmes papier), fiches spéciales (bouton d’urgence, réacteur, oxygène, énergie, radio, moniteur), étiquettes des pièces et panneaux « zone interdite » / « passage », badges fantômes, aide-mémoire. « Imprimer » → imprimante ou « Enregistrer en PDF ». La case **« Laisser le nom de la pièce en blanc »** imprime une ligne à remplir à la main au lieu du nom de la pièce (cochée d’office quand le terrain a été préparé sans connaître la maison). Les codes restent valables d’une partie à l’autre tant que vous ne les régénérez pas.
 
 > **Énigmes papier (mise à jour)** : la grille « inventaire » est inchangée (vos anciennes fiches restent utilisables, la nouvelle impression ajoute seulement les repères A–F / 1–8 et les traits des moitiés), mais les **bandes « puzzle » portent désormais deux lettres** (haut et bas) : **réimprimez et redécoupez** les fiches qui contiennent un puzzle (« Puzzle », « Énigme du coffre »).
 

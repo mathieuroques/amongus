@@ -177,7 +177,7 @@ video.scanner { width: 100%; border-radius: 14px; background: #000; max-height: 
 @media print {
   @page { margin: 10mm; }
   body { background: #fff; color: #000; font-size: 12pt; }
-  .noprint { display: none !important; }
+  .noprint, .toast { display: none !important; }
   .sheet { page-break-after: always; break-after: page; }
   .sheet:last-child { page-break-after: auto; }
 }
