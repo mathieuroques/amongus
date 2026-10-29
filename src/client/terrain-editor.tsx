@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { GAMES, STATION_KIND_LABEL, TASK_TYPE_LABEL } from '../shared/catalog';
 import { CODE_ALPHABET, randomCode } from '../shared/rng';
-import { blankTerrain, EXAMPLE_ROOMS, generateTerrain, newId, PLACEHOLDER_ROOM } from '../shared/terrain';
+import { blankTerrain, EXAMPLE_ROOMS, generateTerrain, newId, PLACEHOLDER_ROOM, removeUnplacedRooms } from '../shared/terrain';
 import type { GameKind, StationKind, TaskType, Terrain } from '../shared/types';
 import type { GmView } from '../shared/view';
 import type { Connection } from './net';
@@ -139,7 +139,7 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
             <button
               class="btn small"
               onClick={() => {
-                const n = Number(prompt('Imprimer sans connaître la maison : combien de pièces jouables pensez-vous avoir (avec un poste chacune) ? Il est sans danger d’en prévoir une ou deux de trop.', '8'));
+                const n = Number(prompt('Imprimer sans connaître la maison : combien de fiches de postes imprimer (une par pièce jouable, 25 au plus) ? Prévoyez large : les fiches non posées se retirent sur place en un geste.', '12'));
                 if (!n || n < 1) return;
                 const g = blankTerrain(n);
                 g.safetyNotes = t.safetyNotes;
@@ -152,10 +152,29 @@ export function TerrainEditor({ v, conn }: { v: GmView; conn: Conn }) {
             </button>
           </div>
           {t.rooms.some((r) => PLACEHOLDER_ROOM.test(r.name)) && (
-            <p class="card warn">
-              Pièces provisoires : posez chaque « Poste A, B… » dans une pièce différente (les fiches spéciales indiquent à côté de quel poste les mettre), puis renommez ici « Pièce A » en « Cuisine », etc., indiquez l’étage et ajoutez escaliers et zones interdites. Ne cliquez <strong>pas</strong> sur « Générer
-              automatiquement » : les codes changeraient. Une fiche posée ailleurs ? Changez la pièce du poste dans la liste ci-dessous. Plus de fiches que de pièces ? Mettez deux postes dans une grande pièce (changez la pièce du poste, puis supprimez la pièce provisoire restée vide).
-            </p>
+            <div class="card warn stack">
+              <p>
+                Pièces provisoires : posez les fiches dans l’ordre des lettres, « Poste A » puis B, C… chacune dans une pièce différente (A à F d’abord : les fiches spéciales vont à côté d’elles). Renommez ici « Pièce A » en « Cuisine », etc., indiquez l’étage
+                et ajoutez escaliers et zones interdites. Ne cliquez <strong>pas</strong> sur « Générer automatiquement » : les codes changeraient. Une fiche posée ailleurs ? Changez la pièce du poste dans la liste ci-dessous.
+              </p>
+              <p>Fiches en trop : une fois toutes les pièces utilisées renommées, retirez celles qui portent encore un nom provisoire. Leurs tâches passent sur les postes posés.</p>
+              <button
+                class="btn small"
+                onClick={() => {
+                  const left = t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name)).map((r) => r.name);
+                  if (!confirm(`Retirer ${left.join(', ')} et leurs postes (fiches non posées) ? Vérifiez que toutes les pièces où une fiche est posée ont été renommées.`)) return;
+                  try {
+                    setT(removeUnplacedRooms(t));
+                    setDirty(true);
+                    toast('Fiches non posées retirées : vérifiez puis enregistrez.', 'info');
+                  } catch (e) {
+                    toast((e as Error).message, 'err');
+                  }
+                }}
+              >
+                🧹 Retirer les fiches non posées
+              </button>
+            </div>
           )}
         </div>
 

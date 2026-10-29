@@ -50,8 +50,8 @@ export function PrintPage({ conn }: { conn: Connection<GmView> }) {
         </label>
         {blank && (
           <p class="card warn">
-            Fiches sans lieu : sur place, posez chaque « Poste A, B… » dans une pièce différente et chaque fiche spéciale à côté du poste indiqué, puis renommez les pièces dans l’onglet Terrain. Les codes restent valables tant que vous ne
-            cliquez pas sur « Générer automatiquement ».
+            Fiches sans lieu : sur place, posez les « Poste A, B… » dans l’ordre des lettres, chacun dans une pièce différente, et chaque fiche spéciale à côté du poste indiqué, puis renommez les pièces dans l’onglet Terrain. Les fiches en trop
+            se retirent ensuite d’un geste (onglet Terrain). Les codes restent valables tant que vous ne cliquez pas sur « Générer automatiquement ».
           </p>
         )}
         <button class="btn big primary" onClick={() => window.print()}>
@@ -108,16 +108,23 @@ function StationSheet({ s, t, blank }: { s: Station; t: Terrain; blank: boolean 
           <div class="scode">{s.code}</div>
         </div>
       </div>
-      <p style={{ marginTop: '6mm' }}>Scannez ce QR code dans l’onglet « Poste » de l’application (ou saisissez le code). Tâches possibles ici :</p>
-      <ul>
-        {tasksHere.map((k) => (
-          <li key={k.id}>
-            {k.name}
-            {k.steps.filter((st) => st.stationId === s.id).some((st) => GAMES[st.game].label !== k.name) &&
-              ` — ${k.steps.filter((st) => st.stationId === s.id).map((st) => GAMES[st.game].label).join(', ')}`}
-          </li>
-        ))}
-      </ul>
+      {blank ? (
+        // les tâches d'un poste préparé à l'avance peuvent changer sur place (fiches en trop retirées)
+        <p style={{ marginTop: '6mm' }}>Scannez ce QR code dans l’onglet « Poste » de l’application (ou saisissez le code) : votre téléphone indique la tâche à faire ici.</p>
+      ) : (
+        <>
+          <p style={{ marginTop: '6mm' }}>Scannez ce QR code dans l’onglet « Poste » de l’application (ou saisissez le code). Tâches possibles ici :</p>
+          <ul>
+            {tasksHere.map((k) => (
+              <li key={k.id}>
+                {k.name}
+                {k.steps.filter((st) => st.stationId === s.id).some((st) => GAMES[st.game].label !== k.name) &&
+                  ` — ${k.steps.filter((st) => st.stationId === s.id).map((st) => GAMES[st.game].label).join(', ')}`}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {paper.map(({ k, st }) =>
         st.game === 'count' ? <CountBlock key={k.id + 'c'} seed={k.seed} name={k.name} /> : <AssembleBlock key={k.id + 'a'} seed={k.seed} name={k.name} />,
       )}

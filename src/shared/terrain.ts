@@ -119,6 +119,12 @@ export function generateTerrain(seeds: RoomSeed[], meetingIndex = 0, rng: Rng = 
   add('comms', at(3), 'Poste Radio');
   add('vitals', at(4), 'Moniteur de vie');
 
+  const tasks = makeTasks(taskStations, rng);
+  return { name, rooms, stations, tasks, passages: [], meetingRoomId: meeting.id, safetyNotes: DEFAULT_SAFETY };
+}
+
+/** Catalogue de tâches réparti sur les postes de tâches donnés. */
+function makeTasks(taskStations: Station[], rng: Rng): TaskDef[] {
   const tasks: TaskDef[] = [];
   let cursor = 0;
   for (const t of TASK_TEMPLATES) {
@@ -130,7 +136,7 @@ export function generateTerrain(seeds: RoomSeed[], meetingIndex = 0, rng: Rng = 
     cursor++;
     tasks.push({ id: newId('t', rng), name: t.name, type: t.type, steps, enabled: true, seed: rng.int(2 ** 31) });
   }
-  return { name, rooms, stations, tasks, passages: [], meetingRoomId: meeting.id, safetyNotes: DEFAULT_SAFETY };
+  return tasks;
 }
 
 /** Nom provisoire d'une pièce créée par blankTerrain (« Pièce A », « Pièce B »…). */
@@ -138,16 +144,80 @@ export const PLACEHOLDER_ROOM = /^Pièce [A-Z]{1,2}$/;
 
 const letter = (i: number) => (i < 26 ? '' : String.fromCharCode(64 + Math.floor(i / 26))) + String.fromCharCode(65 + (i % 26));
 
+/** Les postes spéciaux d'un terrain préparé à l'avance sont tous dans les pièces A à F, posées en premier. */
+export const BLANK_CORE = 6;
+
 /**
  * Terrain pour imprimer les fiches avant de connaître la maison : des pièces provisoires
  * (Pièce A, Pièce B…) et des postes nommés par lettre (Poste A, Poste B…). Sur place, le MJ
  * renomme simplement les pièces : les postes suivent et les codes imprimés restent valables.
+ * On peut en imprimer trop : les fiches non posées se retirent avec removeUnplacedRooms.
  */
 export function blankTerrain(count: number, rng: Rng = cryptoRng): Terrain {
   const n = Math.max(1, Math.min(25, Math.floor(count) || 1));
-  const t = generateTerrain(Array.from({ length: n }, (_, i) => ({ name: `Pièce ${letter(i)}` })), 0, rng, 'Maison (fiches imprimées à l’avance)');
+  const names = Array.from({ length: n }, (_, i) => `Pièce ${letter(i)}`);
+  const t = generateTerrain(names.slice(0, BLANK_CORE).map((name) => ({ name })), 0, rng, 'Maison (fiches imprimées à l’avance)');
+  if (n > BLANK_CORE) {
+    const used = new Set(t.stations.map((s) => s.code));
+    for (const name of names.slice(BLANK_CORE)) {
+      const room: Room = { id: newId('r', rng), name, floor: '', forbidden: false, transit: false, hideAllowed: true, notes: '' };
+      t.rooms.push(room);
+      t.stations.push({ id: newId('s', rng), name: `Poste ${name}`, roomId: room.id, kind: 'task', code: uniqueCode(used, rng) });
+    }
+    t.tasks = makeTasks(t.stations.filter((s) => s.kind === 'task'), rng);
+  }
   for (const s of t.stations) if (s.kind === 'task') s.name = s.name.replace(/^Poste Pièce /, 'Poste ');
   return t;
+}
+
+/** Mini-jeu sans papier qui remplace une énigme papier dont la fiche n'a pas été posée. */
+const NO_PAPER: Partial<Record<GameKind, GameKind>> = { count: 'calibrate', assemble: 'order' };
+
+/**
+ * Sur place : retire les pièces restées au nom provisoire (fiches imprimées en trop, jamais posées)
+ * et leurs postes de tâches. Les étapes de tâches qui s'y trouvaient passent sur les postes posés
+ * (les moins chargés, dans une autre pièce que les autres étapes de la tâche) ; une énigme papier
+ * déplacée devient un mini-jeu sans papier, puisque sa grille est sur la fiche non posée.
+ * Les codes des postes conservés ne changent pas.
+ */
+export function removeUnplacedRooms(t: Terrain): Terrain {
+  const gone = new Set(t.rooms.filter((r) => PLACEHOLDER_ROOM.test(r.name)).map((r) => r.id));
+  if (!gone.size) return t;
+  const stuck = t.stations.filter((s) => s.kind !== 'task' && gone.has(s.roomId));
+  if (stuck.length)
+    throw new Error(`${stuck.map((s) => `« ${s.name} »`).join(', ')} : fiche rattachée à une pièce provisoire. Indiquez la pièce où elle est posée (liste des postes) ou renommez cette pièce.`);
+  const stations = t.stations.filter((s) => !gone.has(s.roomId));
+  const kept = stations.filter((s) => s.kind === 'task');
+  if (!kept.length) throw new Error('Aucun poste de tâches posé : renommez d’abord les pièces où vous avez posé les fiches.');
+  const roomOf = new Map(stations.map((s) => [s.id, s.roomId]));
+  const load = new Map(kept.map((s) => [s.id, 0]));
+  for (const k of t.tasks) for (const st of k.steps) if (load.has(st.stationId)) load.set(st.stationId, load.get(st.stationId)! + 1);
+  const otherRooms = (steps: { stationId: string }[], except: object) => new Set(steps.filter((x) => x !== except && load.has(x.stationId)).map((x) => roomOf.get(x.stationId)));
+
+  const tasks = t.tasks.map((k) => ({ ...k, steps: k.steps.map((st) => ({ ...st })) }));
+  for (const k of tasks) {
+    for (const st of k.steps) {
+      if (load.has(st.stationId)) continue;
+      const taken = otherRooms(k.steps, st);
+      const pick = [...kept].sort((a, b) => Number(taken.has(a.roomId)) - Number(taken.has(b.roomId)) || load.get(a.id)! - load.get(b.id)!)[0];
+      st.stationId = pick.id;
+      load.set(pick.id, load.get(pick.id)! + 1);
+      st.game = NO_PAPER[st.game] ?? st.game;
+    }
+  }
+  // Un poste posé sans aucune tâche reçoit une étape d'un poste qui en a plusieurs (jamais une énigme papier).
+  for (const empty of kept.filter((s) => load.get(s.id) === 0)) {
+    const k = tasks.find((x) => !otherRooms(x.steps, {}).has(empty.roomId) && x.steps.some((st) => load.get(st.stationId)! > 1 && !GAMES[st.game].paper));
+    const st = k?.steps.find((x) => load.get(x.stationId)! > 1 && !GAMES[x.game].paper);
+    if (!st) continue;
+    load.set(st.stationId, load.get(st.stationId)! - 1);
+    st.stationId = empty.id;
+    load.set(empty.id, 1);
+  }
+  const rooms = t.rooms.filter((r) => !gone.has(r.id));
+  const meetingRoomId = gone.has(t.meetingRoomId) ? (stations.find((s) => s.kind === 'emergency')?.roomId ?? rooms.find((r) => !r.forbidden && !r.transit)?.id ?? '') : t.meetingRoomId;
+  const passages = t.passages.filter((p) => !gone.has(p.fromRoomId) && !gone.has(p.toRoomId));
+  return { ...t, rooms, stations, tasks, passages, meetingRoomId };
 }
 
 export function exampleTerrain(rng: Rng = cryptoRng): Terrain {

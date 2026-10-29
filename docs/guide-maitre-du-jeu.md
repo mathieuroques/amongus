@@ -10,7 +10,7 @@ Le MJ ne joue pas : il prépare, présente la sécurité, surveille et arbitre. 
 ## 2. Préparer le terrain (onglet Terrain)
 - **Pièces** : nom, étage, *Interdite*, *Passage* (escalier/couloir : pas de poste, pas d’élimination), *Cachette* autorisée, notes.
 - **Générer postes et tâches automatiquement** : crée un poste de tâches par pièce jouable, le bouton d’urgence dans la salle de réunion, 2 postes Réacteur, 2 postes Oxygène, Énergie, Radio, Moniteur de vie, et 15 tâches. Vous pouvez tout modifier ensuite.
-- **Imprimer avant de connaître la maison** : crée des pièces provisoires (« Pièce A », « Pièce B »…) et des postes nommés par lettre. Imprimez chez vous, puis sur place renommez les pièces : les postes suivent et les codes ne changent pas (détails dans [Installer la maison](installation-terrain.md)).
+- **Imprimer avant de connaître la maison** : crée des pièces provisoires (« Pièce A », « Pièce B »…) et des postes nommés par lettre. Imprimez chez vous (prévoyez large), puis sur place renommez les pièces : les postes suivent et les codes ne changent pas ; **🧹 Retirer les fiches non posées** supprime le surplus et reporte ses tâches sur les postes posés (détails dans [Installer la maison](installation-terrain.md)).
 - **Postes** : nom, pièce, type ; chaque poste a un code imprimé. « ↻ » change le code (il faut alors réimprimer la fiche).
 - **Tâches** : nom, type (commune / longue / courte), active ou non, étapes (poste + mini-jeu). Une tâche longue doit avoir ses étapes dans des pièces différentes.
 - **Conduits** (facultatif, aucun par défaut) : itinéraires sûrs réservés aux imposteurs. Ne les activez que si la maison offre un second chemin éclairé et sans marche.
