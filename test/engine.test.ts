@@ -224,7 +224,8 @@ describe('tâches', () => {
   it('une même étape ne peut pas être validée deux fois (requêtes concurrentes)', () => {
     const s = setup(10, 2);
     const c = crew(s)[0];
-    const t = c.tasks[0];
+    // une tâche à une seule étape : la valider la termine (la progression compte les tâches terminées)
+    const t = c.tasks.find((x) => s.terrain.tasks.find((d) => d.id === x.taskId)!.steps.length === 1)!;
     const def = s.terrain.tasks.find((d) => d.id === t.taskId)!;
     const st = s.terrain.stations.find((x) => x.id === def.steps[0].stationId)!;
     const ch = act(s, c, { type: 'startTask', code: st.code, taskId: t.taskId }) as { id: string };
@@ -232,6 +233,7 @@ describe('tâches', () => {
     const answer = c.challenge!.answer;
     act(s, c, { type: 'submit', challengeId: ch.id, answer });
     expect(err(() => act(s, c, { type: 'submit', challengeId: ch.id, answer }))).toBe('no_challenge');
+    expect(t.step).toBe(1);
     expect(taskProgress(s).done).toBe(1);
   });
 
