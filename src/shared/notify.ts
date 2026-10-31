@@ -56,8 +56,8 @@ export function pushEvents(before: Snapshot, s: GameState): { players: PushMessa
   for (const a of s.alerts) {
     if (a.id > before.alertMax) {
       const who = s.players.find((p) => p.id === a.playerId)?.name ?? 'Un joueur';
-      // contestation : le nom de l'imposteur n'apparaît pas sur l'écran verrouillé du MJ (il est dans le tableau de bord)
-      if (a.kind === 'dispute') gm.push({ title: '⚖️ Contestation d’élimination', body: `${who} conteste son élimination. Voir le tableau de bord.`, tag: `alert${a.id}`, urgent: true });
+      // élimination à vérifier : le nom du tueur n'apparaît pas sur l'écran verrouillé du MJ (il est dans le tableau de bord)
+      if (a.kind === 'dispute') gm.push({ title: '⚖️ Élimination à vérifier', body: `${who} : élimination douteuse. Voir le tableau de bord.`, tag: `alert${a.id}`, urgent: true });
       else gm.push({ title: '⚠️ ALERTE SÉCURITÉ', body: `${who} : ${a.message}`, tag: `alert${a.id}`, urgent: true });
     }
   }

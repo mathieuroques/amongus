@@ -54,7 +54,8 @@ function finishAllTasks(s: GameState, p: PlayerState) {
 
 function kill(s: GameState, imp: PlayerState, victim: PlayerState) {
   if (clock < imp.killCooldownUntil) advance(imp.killCooldownUntil - clock);
-  return act(s, imp, { type: 'kill', target: victim.id });
+  // c'est la victime qui déclare qui l'a touchée
+  return act(s, victim, { type: 'killedBy', killer: imp.id });
 }
 
 function runMeetingToVoting(s: GameState) {
@@ -286,55 +287,91 @@ describe('tâches', () => {
 });
 
 describe('éliminations', () => {
-  it('l’imposteur choisit sa victime : délai initial puis délai entre deux éliminations', () => {
+  it('la victime déclare qui l’a touchée : l’imposteur est crédité, son délai repart', () => {
     const s = setup(10, 2, { initialKillCooldownSec: 30, killCooldownSec: 60 });
     const i = imps(s)[0];
     const [v, w, x] = crew(s);
-    expect(err(() => act(s, i, { type: 'kill', target: v.id }))).toBe('cooldown');
     advance(30_000);
-    expect(act(s, i, { type: 'kill', target: v.id })).toEqual({ ok: true, name: v.name });
+    expect(act(s, v, { type: 'killedBy', killer: i.id })).toEqual({ ok: true });
     expect(v.alive).toBe(false);
+    expect(v.deathCause).toBe('killed');
     expect(v.killedBy).toBe(i.id);
     expect(v.body!.code).toMatch(/^\d{4}$/);
     expect(i.kills).toBe(1);
-    expect(err(() => act(s, i, { type: 'kill', target: w.id }))).toBe('cooldown');
-    advance(59_000);
-    expect(err(() => act(s, i, { type: 'kill', target: w.id }))).toBe('cooldown');
-    advance(1_000);
-    act(s, i, { type: 'kill', target: w.id });
+    expect(i.killCooldownUntil).toBe(clock + 60_000);
+    expect(s.alerts).toHaveLength(0);
+    advance(60_000);
+    act(s, w, { type: 'killedBy', killer: i.id });
     expect(w.alive).toBe(false);
     expect(x.alive).toBe(true);
+    expect(i.kills).toBe(2);
   });
 
-  it('cible invalide : un allié, soi-même, un mort, un inconnu, un joueur parti', () => {
+  it('l’imposteur n’a plus d’action « éliminer » : aucune saisie de sa part', () => {
+    const s = setup(10, 2);
+    advance(60_000);
+    expect(err(() => act(s, imps(s)[0], { type: 'kill', target: crew(s)[0].id } as never))).toBe('unknown');
+    expect(crew(s)[0].alive).toBe(true);
+  });
+
+  it('déclaration douteuse (non-imposteur, inconnu, délai non écoulé) : mort quand même, le MJ est alerté', () => {
+    const s = setup(10, 2, { initialKillCooldownSec: 30, killCooldownSec: 60 });
+    const i = imps(s)[0];
+    const [v, w, x, y] = crew(s);
+    // on ne peut pas « tester » un joueur : la réponse est identique, et la mort est définitive
+    expect(act(s, v, { type: 'killedBy', killer: w.id })).toEqual({ ok: true });
+    expect(v.alive).toBe(false);
+    expect(v.killedBy).toBe(w.id);
+    expect(s.alerts.at(-1)!.kind).toBe('dispute');
+    expect(s.alerts.at(-1)!.message).toContain(w.name);
+    expect(s.alerts.at(-1)!.message).toContain('PAS imposteur');
+    expect(w.kills).toBe(0);
+    act(s, x, { type: 'killedBy', killer: 'unknown' });
+    expect(x.alive).toBe(false);
+    expect(x.killedBy).toBeUndefined();
+    expect(s.alerts.at(-1)!.message).toContain('sans avoir vu');
+    // délai pas encore écoulé (30 s au départ) : l'élimination compte, mais le MJ vérifie
+    act(s, y, { type: 'killedBy', killer: i.id });
+    expect(y.alive).toBe(false);
+    expect(y.killedBy).toBe(i.id);
+    expect(s.alerts.at(-1)!.message).toContain('délai');
+    expect(s.alerts).toHaveLength(3);
+    // les joueurs ne reçoivent jamais les alertes (les noms restent secrets)
+    const z = crew(s)[4];
+    for (const al of s.alerts) expect(JSON.stringify(viewForPlayer(s, z.id, clock))).not.toContain(al.message);
+    expect(viewForGm(s, clock, new Set()).alerts.at(-1)!.kind).toBe('dispute');
+  });
+
+  it('déclaration invalide : soi-même, un mort, un inconnu, un joueur parti ; un imposteur ou un mort ne peut pas déclarer', () => {
     const s = setup(10, 2);
     const [a, b] = imps(s);
-    const [v, w] = crew(s);
+    const [v, w, x] = crew(s);
     advance(60_000);
-    expect(err(() => act(s, a, { type: 'kill', target: b.id }))).toBe('ally');
-    expect(err(() => act(s, a, { type: 'kill', target: a.id }))).toBe('bad_target');
-    expect(err(() => act(s, a, { type: 'kill', target: 'inconnu' }))).toBe('bad_target');
-    expect(err(() => act(s, a, { type: 'kill', target: undefined as never }))).toBe('bad_target');
-    kill(s, b, v);
-    expect(err(() => act(s, a, { type: 'kill', target: v.id }))).toBe('bad_target');
-    act(s, w, { type: 'leave' });
-    expect(err(() => act(s, a, { type: 'kill', target: w.id }))).toBe('bad_target');
-    // aucun refus ne consomme le délai
+    expect(err(() => act(s, v, { type: 'killedBy', killer: v.id }))).toBe('bad_target');
+    expect(err(() => act(s, v, { type: 'killedBy', killer: 'inconnu' }))).toBe('bad_target');
+    expect(err(() => act(s, v, { type: 'killedBy', killer: undefined as never }))).toBe('bad_target');
+    kill(s, b, w);
+    expect(err(() => act(s, v, { type: 'killedBy', killer: w.id }))).toBe('bad_target');
+    expect(err(() => act(s, w, { type: 'killedBy', killer: a.id }))).toBe('dead');
+    act(s, x, { type: 'leave' });
+    expect(err(() => act(s, v, { type: 'killedBy', killer: x.id }))).toBe('bad_target');
+    expect(err(() => act(s, a, { type: 'killedBy', killer: b.id }))).toBe('forbidden');
+    // aucun refus ne tue ni ne consomme le délai
+    expect(v.alive && a.alive).toBe(true);
     expect(a.killCooldownUntil).toBeLessThanOrEqual(clock);
-    expect(b.alive && a.alive).toBe(true);
   });
 
-  it('un membre d’équipage ne peut ni éliminer ni saboter ; un imposteur fantôme ne peut plus éliminer', () => {
+  it('un membre d’équipage ne peut pas saboter ; un imposteur fantôme ne peut plus éliminer', () => {
     const s = setup(10, 2);
     advance(60_000);
-    expect(err(() => act(s, crew(s)[0], { type: 'kill', target: crew(s)[1].id }))).toBe('forbidden');
     expect(err(() => act(s, crew(s)[0], { type: 'sabotage', kind: 'lights' }))).toBe('forbidden');
     const i = imps(s)[0];
     gmAction(s, { type: 'kill', playerId: i.id }, ctx());
-    expect(err(() => act(s, i, { type: 'kill', target: crew(s)[1].id }))).toBe('dead');
+    expect(err(() => act(s, crew(s)[1], { type: 'killedBy', killer: i.id }))).toBe('bad_target');
+    expect(crew(s)[1].alive).toBe(true);
   });
 
-  it('la victime n’a rien à saisir ; son écran devient un corps, les autres ne savent rien', () => {
+  it('la victime devient un corps ; le nom du tueur n’est jamais sur son téléphone ; les autres ne savent rien', () => {
     const s = setup(10, 2);
     const i = imps(s)[0];
     const [v, other] = crew(s);
@@ -344,12 +381,17 @@ describe('éliminations', () => {
     expect(vv.me.bodyPending).toBe(true);
     expect(vv.me.deathRevealed).toBe(false);
     expect(vv.me.body!.code).toBe(v.body!.code);
+    expect(JSON.stringify(vv.me)).not.toContain(i.name);
+    expect('killedByName' in vv.me).toBe(false);
     const vo = viewForPlayer(s, other.id, clock);
     expect(vo.players.find((p) => p.id === v.id)!.status).toBe('alive');
     // le tueur, lui, sait que sa victime est morte ; son allié non (jusqu'à la réunion)
     expect(viewForPlayer(s, i.id, clock).players.find((p) => p.id === v.id)!.status).toBe('dead');
     expect(viewForPlayer(s, imps(s)[1].id, clock).players.find((p) => p.id === v.id)!.status).toBe('alive');
     expect(JSON.stringify(vo)).not.toContain(v.body!.code);
+    // même devenue fantôme après la réunion, la victime ne voit pas le nom de son tueur
+    act(s, other, { type: 'report', code: v.body!.code });
+    expect(JSON.stringify(viewForPlayer(s, v.id, clock).me)).not.toContain(i.name);
   });
 
   it('élimination d’un joueur en plein mini-jeu ou qui tient le réacteur : tout est annulé proprement', () => {
@@ -369,30 +411,6 @@ describe('éliminations', () => {
     expect(v.challenge).toBeUndefined();
     expect(s.sabotage!.holds).toHaveLength(0);
   });
-
-  it('contestation : une seule par mort, seulement pour une élimination, le MJ reçoit le nom du tueur', () => {
-    const s = setup(10, 2);
-    const i = imps(s)[0];
-    const [v, w] = crew(s);
-    expect(err(() => act(s, v, { type: 'dispute' }))).toBe('not_killed');
-    kill(s, i, v);
-    expect(act(s, v, { type: 'dispute' })).toEqual({ ok: true });
-    expect(err(() => act(s, v, { type: 'dispute' }))).toBe('already');
-    const al = s.alerts.at(-1)!;
-    expect(al.kind).toBe('dispute');
-    expect(al.playerId).toBe(v.id);
-    expect(al.message).toContain(i.name);
-    // les joueurs ne reçoivent jamais les alertes (le nom du tueur reste secret)
-    expect(JSON.stringify(viewForPlayer(s, w.id, clock))).not.toContain(al.message);
-    expect(viewForGm(s, clock, new Set()).alerts.at(-1)!.kind).toBe('dispute');
-    expect(viewForPlayer(s, v.id, clock).me.disputed).toBe(true);
-    gmAction(s, { type: 'kill', playerId: w.id }, ctx());
-    expect(err(() => act(s, w, { type: 'dispute' }))).toBe('not_killed'); // mort déclarée par le MJ
-    // le MJ annule l'élimination : la contestation est remise à zéro
-    gmAction(s, { type: 'revive', playerId: v.id }, ctx());
-    expect(v.alive).toBe(true);
-    expect(v.disputed).toBeUndefined();
-  });
 });
 
 describe('corps et réunions', () => {
@@ -410,7 +428,7 @@ describe('corps et réunions', () => {
     expect(viewForPlayer(s, other.id, clock).players.find((p) => p.id === v.id)!.status).toBe('dead');
     // pendant la réunion : pas de tâche, pas d'élimination, pas de sabotage
     advance(120_000);
-    expect(err(() => act(s, i, { type: 'kill', target: other.id }))).toBe('meeting');
+    expect(err(() => act(s, other, { type: 'killedBy', killer: i.id }))).toBe('meeting');
     expect(err(() => act(s, i, { type: 'sabotage', kind: 'lights' }))).toBe('meeting');
     expect(err(() => act(s, other, { type: 'scan', code: stationOf(s, 'task').code }))).toBe('meeting');
   });
@@ -668,7 +686,7 @@ describe('fantômes', () => {
     const [i1] = imps(s);
     gmAction(s, { type: 'kill', playerId: i1.id }, ctx());
     advance(60_000);
-    expect(err(() => act(s, i1, { type: 'kill', target: crew(s)[0].id }))).toBe('dead');
+    expect(err(() => act(s, crew(s)[0], { type: 'killedBy', killer: i1.id }))).toBe('bad_target');
     act(s, i1, { type: 'sabotage', kind: 'lights' });
     expect(s.sabotage?.kind).toBe('lights');
     const ghost = crew(s)[0];
@@ -895,7 +913,7 @@ describe('maître du jeu', () => {
     const s = setup(10, 2);
     gmAction(s, { type: 'stop' }, ctx());
     advance(60_000);
-    expect(err(() => act(s, imps(s)[0], { type: 'kill', target: crew(s)[0].id }))).toBe('paused');
+    expect(err(() => act(s, crew(s)[0], { type: 'killedBy', killer: imps(s)[0].id }))).toBe('paused');
     expect(s.emergencyStop).toBe(true);
   });
 

@@ -125,10 +125,8 @@ export interface PlayerView {
     alive: boolean;
     left: boolean;
     deathCause?: string;
-    killedByName?: string;
     /** La mort a-t-elle été annoncée à tous (réunion ou éjection) ? Le badge FANTÔME ne se porte qu'à partir de là. */
     deathRevealed: boolean;
-    disputed: boolean;
     tasks?: MyTask[];
     /** Prochaine étape conseillée (la plus proche de la dernière tâche faite, sinon l'ordre personnel). */
     nextTaskId?: string;
@@ -391,9 +389,8 @@ export function viewForPlayer(s: GameState, playerId: string, now: number): Play
       alive: me.alive,
       left: me.left,
       deathCause: me.deathCause,
-      killedByName: me.killedBy ? nameOf(s, me.killedBy) : undefined,
+      // jamais le nom du tueur sur le téléphone de la victime pendant la partie : un vivant pourrait le lire
       deathRevealed: me.deathRevealed,
-      disputed: !!me.disputed,
       tasks: myTasks,
       nextTaskId: myTasks ? suggestNext(myTasks) : undefined,
       tasksHidden,

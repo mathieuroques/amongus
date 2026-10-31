@@ -239,7 +239,6 @@ export function startGame(s: GameState, ctx: Ctx) {
     p.killedBy = undefined;
     p.body = undefined;
     p.challenge = undefined;
-    p.disputed = undefined;
     p.lastStationId = undefined;
     p.kills = 0;
     p.checkedIn = false;
@@ -632,8 +631,7 @@ export type PlayerAction =
   | { type: 'cancelChallenge' }
   | { type: 'callEmergency'; code: string }
   | { type: 'report'; code: string }
-  | { type: 'kill'; target: string }
-  | { type: 'dispute' }
+  | { type: 'killedBy'; killer: string }
   | { type: 'sabotage'; kind: SabotageKind }
   | { type: 'fixStart'; code: string }
   | { type: 'hold'; code: string; on: boolean }
@@ -750,17 +748,6 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
         return { ok: true };
       }
       markLeft(s, p, now, `${p.name} a quitté la partie.`);
-      return { ok: true };
-    }
-    case 'dispute': {
-      requireInGame(p);
-      if (s.phase !== 'playing' && s.phase !== 'meeting') fail('not_playing', 'La partie n’est pas en cours.');
-      if (p.alive || p.deathCause !== 'killed') fail('not_killed', 'Seul un joueur éliminé par un imposteur peut contester.');
-      if (p.disputed) fail('already', 'Contestation déjà envoyée au maître du jeu.');
-      p.disputed = true;
-      const message = `Conteste son élimination (attribuée à ${nameOf(s, p.killedBy)}) : « je n’ai pas été touché·e ».`;
-      s.alerts.push({ id: s.nextAlertId++, kind: 'dispute', at: now, playerId: p.id, message, acked: false });
-      log(s, now, 'dispute', `${p.name} ${message}`, true);
       return { ok: true };
     }
     case 'readyVote': {
@@ -915,18 +902,30 @@ export function playerAction(s: GameState, playerId: string, a: PlayerAction, ct
       return { ok: true };
     }
 
-    case 'kill': {
-      // L'imposteur touche sa victime puis choisit son pseudonyme : la victime n'a rien à saisir.
-      if (p.role !== 'impostor') fail('forbidden', 'Action réservée aux imposteurs.');
-      if (!p.alive) fail('dead', 'Les fantômes ne peuvent pas éliminer.');
-      if (now < p.killCooldownUntil) fail('cooldown', `Élimination disponible dans ${Math.ceil((p.killCooldownUntil - now) / 1000)} s.`);
-      const v = s.players.find((x) => x.id === String(a.target ?? ''));
-      if (!v || v.id === p.id || !inGame(v)) fail('bad_target', 'Joueur introuvable.');
-      // l'imposteur connaît déjà ses alliés : ce refus ne révèle rien
-      if (v!.role === 'impostor') fail('ally', 'Impossible : c’est un allié imposteur.');
-      if (!v!.alive) fail('bad_target', 'Ce joueur ne peut pas être éliminé.');
-      killPlayer(s, v!, now, 'killed', p);
-      return { ok: true, name: v!.name };
+    case 'killedBy': {
+      // La victime déclare elle-même qui l'a touchée : l'imposteur n'a rien à saisir (il garde l'air innocent).
+      // Le résultat est le même quel que soit le joueur choisi (on ne peut pas « tester » quelqu'un) :
+      // la déclaration est définitive, et tout cas douteux est signalé au maître du jeu, qui arbitre.
+      if (!p.alive) fail('dead', 'Vous êtes déjà mort·e.');
+      if (p.role === 'impostor') fail('forbidden', 'Un imposteur ne peut pas être éliminé.');
+      const who = String(a.killer ?? '');
+      const k = who === 'unknown' ? undefined : s.players.find((x) => x.id === who);
+      if (who !== 'unknown' && (!k || k.id === p.id || !inGame(k) || !k.alive)) fail('bad_target', 'Choisissez un joueur encore en vie.');
+      const impostor = k?.role === 'impostor' ? k : undefined;
+      let doubt: string | undefined;
+      if (!k) doubt = 'Déclare avoir été éliminé·e sans avoir vu par qui.';
+      else if (!impostor) doubt = `Déclare avoir été éliminé·e par ${k.name}, qui n’est PAS imposteur.`;
+      else if (now < impostor.killCooldownUntil) doubt = `Déclare avoir été éliminé·e par ${k.name} alors que son délai d’élimination n’était pas écoulé (encore ${Math.ceil((impostor.killCooldownUntil - now) / 1000)} s).`;
+      killPlayer(s, p, now, 'killed', impostor);
+      if (!impostor) {
+        p.killedBy = k?.id;
+        log(s, now, 'kill', `${p.name} se déclare éliminé·e${k ? ` par ${k.name} (qui n’est pas imposteur)` : ' (sans savoir par qui)'}.`, true);
+      }
+      if (doubt) {
+        s.alerts.push({ id: s.nextAlertId++, kind: 'dispute', at: now, playerId: p.id, message: doubt, acked: false });
+        log(s, now, 'dispute', `Élimination à vérifier : ${p.name}. ${doubt}`, true);
+      }
+      return { ok: true };
     }
 
     case 'sabotage': {
@@ -1030,7 +1029,7 @@ export function killPlayer(s: GameState, victim: PlayerState, now: number, cause
     killer.killCooldownUntil = now + sec(s.settings.killCooldownSec);
     killer.kills++;
     log(s, now, 'kill', `${killer.name} a éliminé ${victim.name}.`, true);
-  } else {
+  } else if (cause === 'gm') {
     log(s, now, 'kill', `Le maître du jeu a déclaré ${victim.name} mort·e.`, true);
   }
   checkWin(s, now);
@@ -1188,8 +1187,7 @@ export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
       p.deathCause = undefined;
       p.killedBy = undefined;
       p.body = undefined;
-      p.disputed = undefined;
-      log(s, now, 'gm', `Correction : ${p.name} est ramené·e à la vie par le maître du jeu.`);
+        log(s, now, 'gm', `Correction : ${p.name} est ramené·e à la vie par le maître du jeu.`);
       if (s.phase === 'playing') checkWin(s, now);
       return { ok: true };
     }
@@ -1283,8 +1281,7 @@ export function gmAction(s: GameState, a: GmAction, ctx: Ctx): unknown {
         p.tasks = [];
         p.body = undefined;
         p.challenge = undefined;
-        p.disputed = undefined;
-        p.lastStationId = undefined;
+            p.lastStationId = undefined;
         p.kills = 0;
         p.checkedIn = false;
         p.failures = [];

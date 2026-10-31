@@ -277,12 +277,15 @@ describe('notifications : événements publics uniquement', () => {
     const b = snapshot(s);
     const imp = s.players.find((p) => p.role === 'impostor')!;
     const crew = s.players.filter((p) => p.role === 'crewmate');
-    playerAction(s, imp.id, { type: 'kill', target: crew[0].id }, ctx(100_000));
+    playerAction(s, crew[0].id, { type: 'killedBy', killer: imp.id }, ctx(100_000));
     expect(pushEvents(b, s).players).toEqual([]); // aucune notification d'élimination (même pas à la victime)
-    playerAction(s, crew[0].id, { type: 'dispute' }, ctx(100_001));
+    expect(pushEvents(b, s).gm).toEqual([]); // élimination normale : rien à vérifier
+    // nom d'un équipier : le MJ est prévenu, sans nom sur l'écran verrouillé
+    playerAction(s, crew[2].id, { type: 'killedBy', killer: crew[3].id }, ctx(100_001));
     const d = pushEvents(b, s);
     expect(d.players).toEqual([]);
-    expect(d.gm[0].title).toMatch(/Contestation/);
+    expect(d.gm[0].title).toMatch(/à vérifier/);
+    expect(JSON.stringify(d.gm)).not.toContain(crew[3].name);
     playerAction(s, crew[1].id, { type: 'report', code: crew[0].body!.code }, ctx(100_002));
     const txt = JSON.stringify(pushEvents(b, s).players);
     for (const p of s.players) expect(txt).not.toContain(p.name);

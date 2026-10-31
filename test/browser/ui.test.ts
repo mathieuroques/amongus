@@ -64,6 +64,13 @@ async function openAs(ctx: any, p: { token?: string; name: string }) {
 }
 
 /** Lit le défi en cours d'un joueur (2e connexion avec son jeton) : ce que son téléphone a reçu. */
+/** Onglet Urgence → « On vient de m'éliminer ». */
+async function openKilled(page: any) {
+  await page.locator('nav.tabs').getByRole('button', { name: /Urgence/ }).click();
+  await page.getByRole('button', { name: /On vient de m’éliminer/ }).click();
+  await page.locator('.modal .name-grid').waitFor();
+}
+
 async function challengeOf(p: { token?: string }) {
   const spy = await new Phone(code).open();
   await spy.hello(p.token!);
@@ -117,6 +124,9 @@ async function playStepByHand(p: { page: any; id?: string; token?: string }, sho
   await flash.waitFor({ timeout: 20_000 });
   // après validation : retour direct à l'onglet Tâches avec la prochaine étape
   expect(await p.page.locator('nav.tabs button.on').textContent()).toContain('Tâches');
+  // le mini-jeu réussi n'est jamais relancé ni renvoyé (ancien message « ce mini-jeu n'est plus actif »)
+  await sleep(500);
+  expect(await p.page.locator('.toast', { hasText: 'plus actif' }).count()).toBe(0);
   return { game: ch.game, msg: (await flash.locator('strong').textContent()).trim(), taskId: t.taskId };
 }
 
@@ -430,7 +440,12 @@ describe('interface sur téléphone', () => {
       await shot(page, '11b-camera-tache-lancee');
       const ch = await challengeOf(p);
       expect(ch.taskName).toBe(pickOne.def.name);
+      // abandon confirmé : un toucher égaré ne fait pas perdre la tâche
       await page.getByRole('button', { name: 'Abandonner ce mini-jeu' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Annuler' }).click();
+      expect(await page.locator('.overlay .game, .overlay .scan-visual').count()).toBe(1);
+      await page.getByRole('button', { name: 'Abandonner ce mini-jeu' }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Abandonner' }).click();
       await page.locator('.overlay').waitFor({ state: 'detached' });
     } else {
       await byText(page, 'Poste scanné').waitFor({ timeout: 15_000 });
@@ -516,7 +531,7 @@ describe('interface sur téléphone', () => {
     await ctx.close();
   }, 90_000);
 
-  it('élimination par choix du pseudonyme, vibrations, corps scanné à la caméra, réunion, prêt à voter, vote, victoire', async () => {
+  it('élimination déclarée par la victime, vibrations, corps scanné à la caméra, réunion, prêt à voter, vote, victoire', async () => {
     const imp = players.find((p) => role(p) === 'impostor')!;
     const crew = players.filter((p) => p !== imp);
     const [victim, reporter] = crew;
@@ -531,17 +546,23 @@ describe('interface sur téléphone', () => {
     expect(await panel.locator('.danger, .imp').count()).toBe(0);
     expect(await panel.textContent()).not.toMatch(/IMPOSTEUR/);
     expect(await panel.locator('.status-lines').textContent()).toContain('prête');
-    // un allié n'est jamais proposé ; tous les équipiers vivants le sont
-    for (const c of crew) await panel.locator('.name-grid button', { hasText: c.name }).waitFor();
+    // plus aucune liste de victimes : l'imposteur n'a rien à saisir
+    expect(await panel.locator('.name-grid').count()).toBe(0);
+    expect(await panel.textContent()).toContain('c’est elle qui déclare');
     await shot(imp.page, '13-actions-imposteur');
     await noHorizontalScroll(imp.page, 'panneau imposteur');
     const vibBefore = (await vibrations(imp.page)).length;
-    await panel.locator('.name-grid button', { hasText: victim.name }).click();
-    await imp.page.locator('.confirm-bar').waitFor();
-    await shot(imp.page, '14-confirmation-elimination');
-    await imp.page.locator('.confirm-bar').getByRole('button', { name: 'Valider' }).click();
-    // la victime n'a rien à saisir : son écran devient un corps, avec vibration
+    // la victime déclare elle-même qui l'a touchée (tous les vivants sont proposés, rien ne trahit un rôle)
+    await openKilled(victim.page);
+    for (const c of players.filter((x) => x !== victim)) await victim.page.locator('.modal .name-grid button', { hasText: c.name }).waitFor();
+    await victim.page.locator('.modal .name-grid button', { hasText: imp.name }).click();
+    await shot(victim.page, '14-confirmation-elimination');
+    await noHorizontalScroll(victim.page, 'déclaration d’élimination');
+    await victim.page.getByRole('button', { name: 'Valider mon élimination' }).click();
+    await victim.page.getByRole('alertdialog').getByRole('button', { name: 'Je suis éliminé·e' }).click();
+    // son écran devient un corps, avec vibration, sans jamais le nom du tueur
     await byText(victim.page, 'Vous avez été éliminé·e').waitFor({ timeout: 10_000 });
+    expect(await victim.page.locator('body').textContent()).not.toContain(imp.name);
     const bodyCode = (await victim.page.locator('.body-code').textContent()).trim();
     expect(bodyCode).toMatch(/^\d{4}$/);
     expect(await victim.page.locator('.body-screen .qr svg').count()).toBe(1);
@@ -674,8 +695,11 @@ describe('interface sur téléphone', () => {
     await imp.page.locator('nav.tabs').getByRole('button', { name: /Rôle/ }).click();
     if (!(await imp.page.locator('.actions-panel').count())) await imp.page.locator('button.veil', { hasText: 'Actions' }).click();
     await shot(imp.page, '29-actions-imposteur-360');
-    await imp.page.locator('.name-grid button', { hasText: victim.p.name }).click();
-    await imp.page.locator('.confirm-bar').getByRole('button', { name: 'Valider' }).click();
+    await openKilled(victim.page);
+    await noHorizontalScroll(victim.page, 'déclaration d’élimination (360 px)');
+    await victim.page.locator('.modal .name-grid button', { hasText: imp.p.name }).click();
+    await victim.page.getByRole('button', { name: 'Valider mon élimination' }).click();
+    await victim.page.getByRole('alertdialog').getByRole('button', { name: 'Je suis éliminé·e' }).click();
     await byText(victim.page, 'Vous avez été éliminé·e').waitFor({ timeout: 10_000 });
     await noHorizontalScroll(victim.page, 'écran du corps (360 px)');
     // le code du corps tient sur une seule ligne, en très gros

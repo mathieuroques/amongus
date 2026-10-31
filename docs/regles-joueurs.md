@@ -44,10 +44,11 @@ Quatre onglets, identiques pour tous les rôles :
 
 ## 5. Les éliminations
 - Seul un **imposteur vivant** peut éliminer, et seulement lorsque son délai est écoulé (**30 s** au début de la partie, puis **60 s** après chaque élimination et après chaque réunion).
-- L’imposteur touche légèrement l’épaule de sa victime (ou se place à portée de bras pour un joueur « sans contact ») et murmure « éliminé·e », puis choisit **son pseudonyme** dans **Rôle → Actions** et touche **Valider**. La victime **n’a rien à saisir** : son téléphone vibre et passe tout seul en écran « corps ».
-- La victime s’assoit aussitôt, même si elle n’a pas encore regardé son téléphone.
+- L’imposteur touche légèrement l’épaule de sa victime (ou se place à portée de bras pour un joueur « sans contact ») et murmure « éliminé·e ». **L’imposteur n’a rien à saisir.**
+- C’est la **victime** qui déclare aussitôt son élimination, écran caché : onglet **Urgence → « On vient de m’éliminer »**, pseudonyme de la personne qui l’a touchée (tous les joueurs vivants sont proposés, ou « Je n’ai pas vu qui »), puis **Valider mon élimination**. Son téléphone passe en écran « corps » et n’affiche plus jamais ce nom : celui qui découvre le corps ne peut pas le lire.
+- La victime s’assoit aussitôt.
 - Interdit : éliminer dans un escalier, une zone de passage ou une zone interdite ; éliminer à distance (sans être à portée de bras) ; éliminer pendant une réunion.
-- On ne peut pas éliminer un mort, ni un imposteur. Une victime qui n’a pas été touchée touche **« Je n’ai pas été touché·e (contester) »** : le MJ est prévenu, écoute les deux joueurs en privé et peut annuler l’élimination.
+- On ne peut pas éliminer un mort, ni un imposteur. La déclaration est définitive, quel que soit le nom choisi : impossible de s’en servir pour « tester » quelqu’un. Un cas douteux (nom d’un joueur qui n’est pas imposteur, délai de l’imposteur pas écoulé, « je n’ai pas vu qui ») prévient le MJ, qui écoute les joueurs en privé et peut annuler l’élimination.
 
 ## 6. Les corps
 - La victime **s’assoit calmement sur place** (à quelques pas d’un escalier ou d’un passage si besoin), silencieuse et immobile, écran tourné vers l’extérieur : il affiche son **code de corps en très gros** (lisible de loin) et un **QR code** (l’écran reste allumé).

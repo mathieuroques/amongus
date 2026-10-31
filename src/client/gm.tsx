@@ -65,8 +65,8 @@ export function GmApp({ conn }: { conn: Conn }) {
       {alerts.map((a) => (
         <div class="alarm critical" key={a.id}>
           <span class="grow">
-            {a.kind === 'dispute' ? `⚖️ CONTESTATION de ${a.playerName}` : `⚠️ ALERTE de ${a.playerName}`} : {a.message}
-            {a.kind === 'dispute' && <small style={{ display: 'block', color: 'inherit' }}>Écoutez les deux joueurs en privé ; si besoin : onglet Joueurs → {a.playerName} → « Annuler la mort ».</small>}
+            {a.kind === 'dispute' ? `⚖️ ÉLIMINATION À VÉRIFIER — ${a.playerName}` : `⚠️ ALERTE de ${a.playerName}`} : {a.message}
+            {a.kind === 'dispute' && <small style={{ display: 'block', color: 'inherit' }}>Erreur de nom ou tricherie ? Écoutez les joueurs en privé ; si besoin : onglet Joueurs → {a.playerName} → « Annuler la mort ».</small>}
           </span>
           <ActButton class="small" run={() => conn.act({ type: 'ackAlert', id: a.id })}>
             Vu

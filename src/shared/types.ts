@@ -165,8 +165,6 @@ export interface PlayerState {
   tasks: AssignedTask[];
   emergencyLeft: number;
   killCooldownUntil: number;
-  /** Contestation de son élimination déjà envoyée au MJ (une seule par mort). */
-  disputed?: boolean;
   /** Poste de la dernière étape de tâche réussie (sert à proposer une prochaine étape proche). */
   lastStationId?: string;
   body?: Body;
@@ -243,7 +241,7 @@ export interface LogEntry {
 
 export interface SafetyAlert {
   id: number;
-  /** 'dispute' = un joueur conteste son élimination (sinon alerte sécurité). */
+  /** 'dispute' = élimination déclarée à vérifier par le MJ (tueur non imposteur, inconnu, délai non écoulé) ; sinon alerte sécurité. */
   kind?: 'safety' | 'dispute';
   at: number;
   playerId: string;

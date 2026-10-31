@@ -150,7 +150,7 @@ export function useGmAlerts(v?: GmView) {
     const max = Math.max(0, ...v.alerts.map((a) => a.id));
     if (last.current !== undefined && max > last.current) {
       const a = v.alerts.find((x) => x.id === max)!;
-      raiseAlert('safety', a.kind === 'dispute' ? 'CONTESTATION' : 'ALERTE SÉCURITÉ', `${a.playerName} : ${a.message}`, 'stop', VIB.stop);
+      raiseAlert('safety', a.kind === 'dispute' ? 'ÉLIMINATION À VÉRIFIER' : 'ALERTE SÉCURITÉ', `${a.playerName} : ${a.message}`, 'stop', VIB.stop);
     }
     last.current = max;
   }, [v?.alerts]);

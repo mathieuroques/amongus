@@ -198,7 +198,7 @@ describe('parcours complet multi-téléphones', () => {
     expect((await a.act({ type: 'submit', challengeId: ch.data.id, answer: solve(ch.data, t.taskId) })).code).toBe('too_fast');
     expect((await b.act({ type: 'submit', challengeId: ch.data.id, answer: 'done' })).code).toBe('no_challenge');
     expect((await a.act({ type: 'vote', target: 'skip' })).code).toBe('not_voting');
-    expect((await a.act({ type: 'kill', target: b.playerId })).code).toBe('forbidden');
+    expect((await a.act({ type: 'kill', target: b.playerId })).code).toBe('unknown'); // l'imposteur ne saisit plus rien
     expect((await a.act({ type: 'arm' })).code).toBe('unknown'); // ancienne action supprimée : refusée proprement
     expect((await a.act({ type: 'sabotage', kind: 'reactor' })).code).toBe('forbidden');
     await a.act({ type: 'cancelChallenge' });
@@ -287,30 +287,38 @@ describe('parcours complet multi-téléphones', () => {
     expect((await phones[5].act({ type: 'cancelChallenge' })).ok).toBe(true);
   }, 30_000);
 
-  it('12-13. élimination par choix du pseudonyme : la victime n’a rien à saisir, délai respecté, contestation', async () => {
+  it('12-13. élimination déclarée par la victime : délai respecté, nom du tueur jamais sur son téléphone, cas douteux au MJ', async () => {
     const imps = phones.filter((p) => role(p) === 'impostor');
     const crew = phones.filter((p) => role(p) === 'crewmate');
     const k = imps[0];
     const victim = crew[10];
-    expect((await k.act({ type: 'kill', target: imps[1].playerId })).code).toBe('ally');
-    const r = await k.act({ type: 'kill', target: victim.playerId });
+    // un imposteur ne peut pas se déclarer éliminé
+    expect((await imps[1].act({ type: 'killedBy', killer: k.playerId })).code).toBe('forbidden');
+    const r = await victim.act({ type: 'killedBy', killer: k.playerId });
     expect(r.ok, r.msg).toBe(true);
-    // le téléphone de la victime passe tout seul en écran « corps »
+    // le téléphone de la victime passe en écran « corps », sans jamais le nom du tueur
     await victim.waitState((s) => s.me.alive === false && s.me.bodyPending && /^\d{4}$/.test(s.me.body.code));
-    // délai entre deux éliminations
-    expect((await k.act({ type: 'kill', target: crew[11].playerId })).code).toBe('cooldown');
-    // un mort ne peut pas être « re-tué »
-    expect((await imps[1].act({ type: 'kill', target: victim.playerId })).code).toBe('bad_target');
-    // un équipier ne peut pas éliminer
-    expect((await crew[11].act({ type: 'kill', target: crew[12].playerId })).code).toBe('forbidden');
+    expect(JSON.stringify(victim.state.me)).not.toContain(k.state.me.name);
+    // le délai du tueur repart
+    const g0 = await gm.waitState((s) => s.players.find((x: any) => x.id === victim.playerId).killedByName === k.state.me.name);
+    expect(g0.players.find((x: any) => x.id === k.playerId).killCooldownUntil).toBeGreaterThan(Date.now());
+    expect(g0.alerts.some((a: any) => a.kind === 'dispute' && a.playerId === victim.playerId)).toBe(false);
+    // un mort ne peut pas se re-déclarer, ni être désigné
+    expect((await victim.act({ type: 'killedBy', killer: k.playerId })).code).toBe('dead');
+    expect((await crew[11].act({ type: 'killedBy', killer: victim.playerId })).code).toBe('bad_target');
     // les autres ignorent encore la mort
     expect(crew[12].state.players.find((x: any) => x.id === victim.playerId).status).toBe('alive');
-    // la victime conteste : le MJ est prévenu (et lui seul)
-    expect((await victim.act({ type: 'dispute' })).ok).toBe(true);
-    const g = await gm.waitState((s) => s.alerts.some((a: any) => a.kind === 'dispute' && a.playerId === victim.playerId));
-    expect(g.alerts.find((a: any) => a.kind === 'dispute').message).toContain(k.state.me.name);
-    expect(JSON.stringify(crew[12].state)).not.toContain('Conteste');
-    await gm.act({ type: 'ackAlert', id: g.alerts.find((a: any) => a.kind === 'dispute').id });
+    // nom d'un équipier : mort quand même (rien à « tester »), le MJ est prévenu (et lui seul)
+    const v2 = crew[9];
+    expect((await v2.act({ type: 'killedBy', killer: crew[12].playerId })).ok).toBe(true);
+    const g = await gm.waitState((s) => s.alerts.some((a: any) => a.kind === 'dispute' && a.playerId === v2.playerId));
+    const al = g.alerts.find((a: any) => a.kind === 'dispute' && a.playerId === v2.playerId);
+    expect(al.message).toContain(crew[12].state.me.name);
+    expect(JSON.stringify(crew[12].state)).not.toContain(al.message);
+    await gm.act({ type: 'ackAlert', id: al.id });
+    // le MJ annule cette mort injustifiée
+    expect((await gm.act({ type: 'revive', playerId: v2.playerId })).ok).toBe(true);
+    await v2.waitState((s) => s.me.alive === true);
   });
 
   it('14-18. signalement, réunion, actions bloquées, vote secret, double vote refusé, résultat', async () => {
@@ -325,7 +333,7 @@ describe('parcours complet multi-téléphones', () => {
     expect(crew[12].state.meeting.bodyOfName).toBe(victim.state.me.name);
     // actions interdites pendant la réunion
     await sleep(5_000);
-    expect((await imps[2].act({ type: 'kill', target: crew[1].playerId })).code).toBe('meeting');
+    expect((await crew[1].act({ type: 'killedBy', killer: imps[2].playerId })).code).toBe('meeting');
     expect((await crew[1].act({ type: 'scan', code: station('task').code })).code).toBe('meeting');
     // rassemblement : la majorité pointe → l'alarme du serveur ouvre la suite 15 s plus tard (au lieu de 60 s)
     const alive = phones.filter((p) => p.state.me.alive);

@@ -19,7 +19,7 @@ Légende : ❌ retiré / non reproduit · 🔁 remplacé par un équivalent qui 
 ## 2. Informations que le jeu connaît et que la maison ignore
 | Mécanique | Pourquoi | Dans notre version |
 |---|---|---|
-| **Distance d’élimination**, ligne de vue | Le téléphone ne sait pas où est le joueur | 🔁 Le geste (tape sur l’épaule) puis le choix du pseudonyme par l’imposteur ; ⚠️ éliminer à distance serait de la triche : la victime peut **contester** et le MJ arbitre (voir `conception.md` § 4) |
+| **Distance d’élimination**, ligne de vue | Le téléphone ne sait pas où est le joueur | 🔁 Le geste (tape sur l’épaule) puis la déclaration par la victime, qui choisit qui l’a touchée ; ⚠️ un cas douteux (non-imposteur, délai non écoulé, tueur inconnu) est signalé au MJ, qui arbitre (voir `conception.md` § 4) |
 | **Présence au poste** d’une tâche | Idem | 🔁 Code/QR imprimé à un endroit fixe ; ⚠️ une photo du code permettrait de tricher (journal des codes erronés, arbitrage) |
 | **Caméras de sécurité** | Il faudrait filmer la maison : vie privée, matériel | ❌ |
 | **Carte d’administration** (nombre de joueurs par pièce) | Il faudrait localiser chaque téléphone en intérieur (impossible de façon fiable depuis un site web, et intrusif) | ❌ |

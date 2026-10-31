@@ -21,7 +21,7 @@ Pendant une **panne de courant**, les tâches continuent, mais **personne ne peu
 - Rien ne se prouve en montrant son téléphone : n’importe qui peut afficher une fausse carte « Équipage ».
 
 ## Si vous êtes éliminé·e
-Un imposteur vous touche l’épaule et murmure « éliminé·e » : **vous n’avez rien à taper**, votre téléphone passe tout seul en écran « corps » (il vibre). Asseyez-vous sur place, en silence, écran tourné vers l’extérieur (code en très gros et QR code). Ne révélez jamais qui vous a tué·e. Personne ne vous a touché·e ? Touchez « Je n’ai pas été touché·e (contester) » : le maître du jeu viendra vous parler. Ensuite, lisez le guide des fantômes.
+Un imposteur vous touche l’épaule et murmure « éliminé·e » : **déclarez-le aussitôt** sur votre téléphone, écran caché : onglet **Urgence → « On vient de m’éliminer »**, touchez le pseudonyme de la personne qui vous a touché·e (ou « Je n’ai pas vu qui »), puis **Valider mon élimination**. Ce nom ne s’affiche plus jamais sur votre téléphone. Votre écran devient alors un « corps » : asseyez-vous sur place, en silence, écran tourné vers l’extérieur (code en très gros et QR code). Ne révélez jamais qui vous a tué·e. Ensuite, lisez le guide des fantômes.
 
 ## Trouver un corps
 Onglet **Poste** → visez le QR code affiché par le téléphone du corps → confirmez. Ou onglet **Urgence → J’ai trouvé un corps** → tapez le code affiché en gros. La réunion commence. (Impossible pendant une panne de courant : réparez d’abord.)

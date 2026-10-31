@@ -6,7 +6,7 @@
 
 **Tâches** — Allez au poste de la « Prochaine étape » (onglet *Tâches*), touchez la carte : la caméra s’ouvre, visez le QR code, le mini-jeu démarre. Ensuite, l’application affiche directement l’étape suivante. Les énigmes papier changent de question à chaque fois. Le « scan médical » vert est une preuve d’innocence.
 
-**Élimination** — L’imposteur touche l’épaule, murmure « éliminé·e » et choisit le pseudonyme de sa victime (*Rôle → Actions*). La victime n’a rien à taper : elle s’assoit. Jamais dans un escalier ou un passage. Pas touché·e ? Bouton « contester » : le MJ arbitre.
+**Élimination** — L’imposteur touche l’épaule et murmure « éliminé·e » ; il n’a rien à saisir. La victime le déclare aussitôt, écran caché (*Urgence → On vient de m’éliminer*, pseudonyme de qui l’a touchée), puis s’assoit. Jamais dans un escalier ou un passage. Cas douteux : le MJ arbitre.
 
 **Corps** — La victime s’assoit sur place en silence, écran tourné vers l’extérieur (code en très gros + QR code). Celui qui la trouve vise le QR code (onglet *Poste*) ou tape le code (onglet *Urgence*) → réunion.
 

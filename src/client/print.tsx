@@ -193,7 +193,7 @@ export function SummarySheet() {
           <strong>Imposteurs</strong> : éliminer et saboter sans être démasqués. Victoire : autant d’imposteurs que d’équipiers vivants, ou sabotage critique non réparé.
         </li>
         <li>
-          <strong>Élimination</strong> : l’imposteur touche l’épaule (ou se place à portée de bras) puis choisit le pseudonyme de sa victime sur son téléphone ; la victime n’a rien à saisir et peut contester auprès du MJ.{' '}
+          <strong>Élimination</strong> : l’imposteur touche l’épaule (ou se place à portée de bras) ; la victime déclare aussitôt son élimination sur son téléphone (onglet Urgence → « On vient de m’éliminer ») en choisissant discrètement qui l’a touchée. L’imposteur n’a rien à saisir.{' '}
           Un délai fixé par le MJ sépare deux éliminations. Jamais dans un escalier ou un passage.
         </li>
         <li>

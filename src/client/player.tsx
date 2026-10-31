@@ -345,7 +345,7 @@ function InGame({ v, conn }: { v: PlayerView; conn: Conn }) {
   return (
     <>
       <div class="wrap stack">
-        {!v.me.alive && <GhostCard v={v} conn={conn} />}
+        {!v.me.alive && <GhostCard v={v} />}
         {tab === 'tasks' && <TasksTab v={v} flash={flash} goScan={() => setTab('scan')} />}
         {tab === 'scan' && <ScanTab v={v} conn={conn} initial={pending} onConsumed={() => setPending(undefined)} />}
         {tab === 'urgent' && <UrgentTab v={v} conn={conn} goScan={() => setTab('scan')} />}
@@ -392,7 +392,7 @@ function useReadyBuzz(v: PlayerView, conn: Conn) {
 }
 export const READY_BUZZ = { kill: [90], sabotage: [40, 70, 40] };
 
-function GhostCard({ v, conn }: { v: PlayerView; conn: Conn }) {
+function GhostCard({ v }: { v: PlayerView }) {
   const imp = v.me.role === 'impostor';
   return (
     <div class="card ghost stack">
@@ -404,28 +404,11 @@ function GhostCard({ v, conn }: { v: PlayerView; conn: Conn }) {
       ) : (
         <p style={{ margin: 0 }}>
           <strong>👻 Vous êtes mort·e, mais personne ne le sait encore.</strong> Ne portez pas encore le badge FANTÔME : il s’accroche à la prochaine réunion, quand votre mort
-          sera annoncée. D’ici là, silence total, ne répondez à personne{imp ? ' ; vous pouvez encore saboter.' : ' ; faites vos tâches discrètement.'}
+          sera annoncée. D’ici là, silence total, ne répondez à personne{imp ? ' ; vous pouvez encore saboter.' : ' ; faites vos tâches discrètement.'} Si votre
+          élimination vous semble injuste, parlez-en au maître du jeu, en privé.
         </p>
       )}
-      <DisputeButton v={v} conn={conn} />
     </div>
-  );
-}
-
-/** La victime peut contester une élimination (« on ne m'a pas touché·e ») : le MJ est prévenu et arbitre. */
-function DisputeButton({ v, conn }: { v: PlayerView; conn: Conn }) {
-  if (v.me.alive || v.me.deathCause !== 'killed' || v.phase === 'ended') return null;
-  if (v.me.disputed) return <small class="muted">Contestation envoyée : le maître du jeu va vous parler.</small>;
-  return (
-    <ActButton
-      class="block small"
-      confirm="Contester votre élimination ? Le maître du jeu est prévenu et viendra vous parler. À utiliser seulement si personne ne vous a touché·e."
-      confirmOk="Contester"
-      run={() => conn.act({ type: 'dispute' })}
-      okMsg="Le maître du jeu est prévenu."
-    >
-      ⚖️ Je n’ai pas été touché·e (contester)
-    </ActButton>
   );
 }
 
@@ -746,10 +729,24 @@ function ReactorHold({ v, conn, code }: { v: PlayerView; conn: Conn; code: strin
 }
 
 // ------------------------------------------------------------------- Mini-jeu en cours
-export function ChallengeBody({ c, submit, serverNow }: { c: ChallengeView; submit: (answer: unknown) => Promise<boolean>; serverNow: () => number }) {
+/**
+ * Mini-jeu en cours. Après une réponse acceptée, il n'est plus jamais réaffiché : sans cela, il se relançait
+ * le temps que l'écran se ferme (un mini-jeu à durée renvoyait même sa réponse, refusée par le serveur
+ * avec « ce mini-jeu n'est plus actif », alors que la tâche venait d'être validée).
+ * `onBusy` signale l'envoi en cours : le bouton « Abandonner » est alors masqué (il remontait sous le doigt).
+ */
+export function ChallengeBody({ c, submit, serverNow, onBusy }: { c: ChallengeView; submit: (answer: unknown) => Promise<boolean>; serverNow: () => number; onBusy?: (busy: boolean) => void }) {
   const [attempt, setAttempt] = useState(0);
-  const [sending, setSending] = useState(false);
-  return sending ? (
+  const [stage, setStage] = useState<'play' | 'sending' | 'ok'>('play');
+  const busy = useRef(false);
+  useEffect(() => onBusy?.(stage !== 'play'), [stage]);
+  if (stage === 'ok')
+    return (
+      <div class="card ok center" role="status">
+        ✅ Validé
+      </div>
+    );
+  return stage === 'sending' ? (
     <div class="card center">
       <span class="spinner" /> Validation par le serveur…
     </div>
@@ -759,12 +756,16 @@ export function ChallengeBody({ c, submit, serverNow }: { c: ChallengeView; subm
       c={c}
       serverNow={serverNow}
       done={async (answer) => {
-        setSending(true);
+        if (busy.current) return;
+        busy.current = true;
+        setStage('sending');
         const wait = c.startedAt + c.minMs - serverNow();
         if (wait > 0) await new Promise((r) => setTimeout(r, wait + 150));
         const ok = await submit(answer);
-        setSending(false);
-        if (!ok) setAttempt((a) => a + 1);
+        busy.current = false;
+        if (ok) return setStage('ok');
+        setStage('play');
+        setAttempt((a) => a + 1);
       }}
     />
   );
@@ -772,6 +773,7 @@ export function ChallengeBody({ c, submit, serverNow }: { c: ChallengeView; subm
 
 function ChallengeScreen({ v, c, conn, onSuccess }: { v: PlayerView; c: ChallengeView; conn: Conn; onSuccess: (msg: string) => void }) {
   const info = gameInfo(c.game);
+  const [busy, setBusy] = useState(false);
   return (
     <div class="overlay">
       <div class="wrap stack">
@@ -784,8 +786,10 @@ function ChallengeScreen({ v, c, conn, onSuccess }: { v: PlayerView; c: Challeng
         <p class="hint">{info?.hint}</p>
         {v.sabotage && v.sabotage.critical && c.purpose !== 'fix' && <p class="card danger">🚨 {v.sabotage.label} en cours !</p>}
         <ChallengeBody
+          key={c.id}
           c={c}
           serverNow={() => conn.serverNow()}
+          onBusy={setBusy}
           submit={async (answer) => {
             const r = await conn.act<{ taskDone?: boolean; fixed?: boolean; partial?: boolean; nextStep?: number }>({ type: 'submit', challengeId: c.id, answer });
             if (!r.ok) {
@@ -809,9 +813,19 @@ function ChallengeScreen({ v, c, conn, onSuccess }: { v: PlayerView; c: Challeng
             return true;
           }}
         />
-        <ActButton class="block" run={() => conn.act({ type: 'cancelChallenge' })}>
-          Abandonner ce mini-jeu
-        </ActButton>
+        {/* séparé du mini-jeu et confirmé : un toucher égaré (cibles, STOP…) ne doit pas faire perdre la tâche */}
+        {!busy && (
+          <div style={{ marginTop: '28px' }}>
+            <ActButton
+              class="block small"
+              confirm="Abandonner ce mini-jeu ? L’étape n’est pas validée : il faudra rescanner le poste pour la refaire."
+              confirmOk="Abandonner"
+              run={() => conn.act({ type: 'cancelChallenge' })}
+            >
+              Abandonner ce mini-jeu
+            </ActButton>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -854,7 +868,6 @@ function BodyScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
           Si personne ne vous trouve, votre corps disparaît dans <Countdown until={b.vanishAt} now={now} /> : vous deviendrez un fantôme, sans badge jusqu’à la prochaine réunion.
         </p>
       )}
-      <DisputeButton v={v} conn={conn} />
       <ActButton class="block" run={() => conn.act({ type: 'alert', message: 'Alerte envoyée par un corps' })} okMsg="Le maître du jeu est prévenu.">
         ⚠️ Alerte sécurité
       </ActButton>
@@ -864,7 +877,7 @@ function BodyScreen({ v, conn }: { v: PlayerView; conn: Conn }) {
 
 // ------------------------------------------------------------------- Urgence
 function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () => void }) {
-  const [modal, setModal] = useState<'body' | 'alert' | 'meeting'>();
+  const [modal, setModal] = useState<'body' | 'alert' | 'meeting' | 'killed'>();
   useTick(1000);
   const now = conn.serverNow();
   const meetingRoom = v.terrain.rooms.find((r) => r.id === v.terrain.meetingRoomId)?.name;
@@ -873,6 +886,10 @@ function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () 
       <h2 style={{ margin: '4px 0' }}>Que se passe-t-il ?</h2>
       {v.me.alive && (
         <>
+          {/* bouton présent sur tous les téléphones (imposteurs compris) : l'écran ne trahit aucun rôle */}
+          <button class="btn big block danger action" onClick={() => setModal('killed')}>
+            <span>🗡</span> On vient de m’éliminer
+          </button>
           <button class="btn big block danger action" onClick={() => setModal('body')}>
             <span>💀</span> J’ai trouvé un corps
           </button>
@@ -926,6 +943,7 @@ function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () 
         </Modal>
       )}
       {modal === 'alert' && <AlertModal conn={conn} close={() => setModal(undefined)} />}
+      {modal === 'killed' && v.me.alive && <KilledModal v={v} conn={conn} close={() => setModal(undefined)} />}
       <div class="spacer" />
       <ActButton
         class="block small"
@@ -943,6 +961,59 @@ function UrgentTab({ v, conn, goScan }: { v: PlayerView; conn: Conn; goScan: () 
         Quitter la partie
       </ActButton>
     </>
+  );
+}
+
+/**
+ * La victime déclare elle-même son élimination en choisissant qui l'a touchée. Tous les joueurs vivants sont
+ * proposés (rien n'indique qui est imposteur) et, une fois validé, ce nom n'est plus jamais affiché sur ce
+ * téléphone : celui qui découvre le corps (ou qui regarde par-dessus l'épaule) ne peut pas le lire.
+ */
+function KilledModal({ v, conn, close }: { v: PlayerView; conn: Conn; close: () => void }) {
+  const [killer, setKiller] = useState<string>();
+  const [filter, setFilter] = useState('');
+  const others = v.players.filter((p) => p.status === 'alive' && p.id !== v.me.id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const shown = filter ? others.filter((p) => norm(p.name).includes(norm(filter))) : others;
+  return (
+    <Modal title="🗡 On vient de m’éliminer" onClose={close}>
+      <p style={{ margin: 0 }}>
+        Un imposteur vous a touché·e ? Choisissez discrètement qui, cachez votre écran. Ce nom ne s’affichera plus jamais sur votre téléphone.
+      </p>
+      {v.phase !== 'playing' || v.paused || v.emergencyStop ? (
+        <p class="card warn">Impossible pendant une réunion ou une pause : parlez-en au maître du jeu.</p>
+      ) : (
+        <>
+          {others.length > 8 && <input type="search" placeholder="Rechercher un pseudonyme" value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} aria-label="Rechercher un pseudonyme" />}
+          <div class="name-grid">
+            {shown.map((p) => (
+              <button key={p.id} class={`btn name ${killer === p.id ? 'sel' : ''}`} onClick={() => setKiller(p.id)}>
+                {p.name}
+              </button>
+            ))}
+            <button class={`btn name ${killer === 'unknown' ? 'sel' : ''}`} onClick={() => setKiller('unknown')}>
+              Je n’ai pas vu qui
+            </button>
+          </div>
+          <ActButton
+            class="block big danger"
+            disabled={!killer}
+            confirm="Confirmer votre élimination ? C’est définitif : vous devenez un corps."
+            confirmOk="Je suis éliminé·e"
+            run={async () => {
+              const r = await conn.act({ type: 'killedBy', killer });
+              if (r.ok) {
+                buzz(60);
+                close();
+              }
+              return r;
+            }}
+          >
+            {killer ? 'Valider mon élimination' : 'Choisissez qui vous a touché·e'}
+          </ActButton>
+        </>
+      )}
+    </Modal>
   );
 }
 
@@ -1068,16 +1139,7 @@ function ImpostorActions({ v, conn }: { v: PlayerView; conn: Conn }) {
   const now = conn.serverNow();
   const cd = v.me.killCooldownUntil ?? 0;
   const sabCd = v.sabotageCooldownUntil ?? 0;
-  const [target, setTarget] = useState<string>();
-  const [filter, setFilter] = useState('');
-  const allies = new Set((v.allies ?? []).map((a) => a.id));
-  const targets = v.players
-    .filter((p) => p.status === 'alive' && p.id !== v.me.id && !allies.has(p.id))
-    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const shown = filter ? targets.filter((p) => norm(p.name).includes(norm(filter))) : targets;
   const killReady = v.me.alive && now >= cd;
-  const targetName = targets.find((p) => p.id === target)?.name;
   return (
     <div class="stack">
       <div class="status-lines">
@@ -1093,20 +1155,10 @@ function ImpostorActions({ v, conn }: { v: PlayerView; conn: Conn }) {
         </div>
       </div>
       {v.me.alive && (
-        <div class="stack">
-          <p class="muted" style={{ margin: 0 }}>
-            Touchez l’épaule de la personne, puis son pseudonyme. Jamais dans un escalier ou un passage.
-          </p>
-          {targets.length > 8 && <input type="search" placeholder="Rechercher un pseudonyme" value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} aria-label="Rechercher un pseudonyme" />}
-          <div class="name-grid">
-            {shown.map((p) => (
-              <button key={p.id} class={`btn name ${target === p.id ? 'sel' : ''}`} disabled={!killReady} onClick={() => setTarget(p.id)}>
-                {p.name}
-              </button>
-            ))}
-          </div>
-          {shown.length === 0 && <p class="muted">Personne.</p>}
-        </div>
+        <p class="muted" style={{ margin: 0 }}>
+          {killReady ? 'Touchez l’épaule de la personne : c’est elle qui déclare son élimination sur son téléphone. Vous n’avez rien à saisir.' : 'Attendez la fin du délai avant de toucher quelqu’un.'}{' '}
+          Jamais dans un escalier ou un passage.
+        </p>
       )}
       <div class="stack">
         {v.sabotage ? (
@@ -1143,28 +1195,6 @@ function ImpostorActions({ v, conn }: { v: PlayerView; conn: Conn }) {
           </ul>
           <small>En marchant. Être vu sortir d’un conduit est une preuve !</small>
         </Collapse>
-      )}
-      {target && targetName && (
-        <div class="confirm-bar neutral">
-          <div>{targetName} ?</div>
-          <div class="row">
-            <button class="btn grow" onClick={() => setTarget(undefined)}>
-              Annuler
-            </button>
-            <ActButton
-              class="grow primary"
-              run={async () => {
-                const r = await conn.act({ type: 'kill', target });
-                setTarget(undefined);
-                if (r.ok) buzz(40);
-                return r;
-              }}
-              okMsg="Validé."
-            >
-              Valider
-            </ActButton>
-          </div>
-        </div>
       )}
     </div>
   );

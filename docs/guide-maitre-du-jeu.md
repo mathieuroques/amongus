@@ -58,7 +58,7 @@ Une **barre d’état** reste toujours visible en haut : phase et chrono, sabota
 - **Réunion** : étape en cours, arrivées, « prêts à voter », votes en direct (vous seul les voyez), boutons *Étape suivante*, *+30 s*, *−30 s*. Le rassemblement se raccourcit seul à 15 s dès que la majorité est arrivée, et le vote s’ouvre dès que la majorité est « prête à voter » : *+30 s* reste possible pour un retardataire.
 - **Convoquer une réunion** : pour un corps dont le téléphone ne fonctionne plus, ou un litige.
 - **Fin de partie manuelle** : victoire équipage, imposteurs, ou sans vainqueur (avertissement de confirmation).
-- **Alertes sécurité** et **contestations d’élimination** : écran d’alerte, sonnerie, bandeau rouge (et notification si votre téléphone est verrouillé et les notifications activées) ; touchez « Vu » après avoir réagi. La notification d’une contestation ne nomme pas l’imposteur (elle peut s’afficher sur l’écran verrouillé) : son nom est dans le bandeau du tableau de bord.
+- **Alertes sécurité** et **éliminations à vérifier** : écran d’alerte, sonnerie, bandeau rouge (et notification si votre téléphone est verrouillé et les notifications activées) ; touchez « Vu » après avoir réagi. La notification d’une élimination à vérifier ne nomme personne (elle peut s’afficher sur l’écran verrouillé) : les noms sont dans le bandeau du tableau de bord.
 
 ## 8. Joueurs (onglet Joueurs)
 Cartes filtrables (tous, vivants, morts, déconnectés) : statut (vivant, mort, éjecté, corps non trouvé), connexion 🟢/⚪, notifications 🔔, tâches. « Afficher les rôles » : ne cochez que si personne ne voit votre écran. **Gérer** un joueur :
@@ -67,7 +67,7 @@ Cartes filtrables (tous, vivants, morts, déconnectés) : statut (vivant, mort, 
 Chaque correction modifie l’équilibre de la partie : une confirmation est demandée et l’action est inscrite au journal.
 
 ## 9. Arbitrage
-- **Élimination contestée** : la victime touche « Je n’ai pas été touché·e (contester) » ; vous recevez une alerte « CONTESTATION » avec le nom de l’imposteur. Écoutez les deux joueurs séparément ; le journal (onglet Journal, « Afficher les événements secrets ») indique l’heure de chaque élimination et de la contestation. Annulez (Joueurs → Gérer → « Annuler la mort ») si la règle n’a pas été respectée (pas de contact, escalier, à distance…). Une erreur de pseudonyme de l’imposteur se corrige de la même façon.
+- **Élimination à vérifier** : c’est la victime qui déclare qui l’a touchée. Si elle désigne un joueur qui n’est pas imposteur, un imposteur dont le délai n’était pas écoulé, ou « Je n’ai pas vu qui », elle meurt quand même (impossible de « tester » quelqu’un) et vous recevez une alerte « ÉLIMINATION À VÉRIFIER » avec les noms. Écoutez les joueurs séparément ; le journal (onglet Journal, « Afficher les événements secrets ») indique l’heure de chaque élimination. Annulez (Joueurs → Gérer → « Annuler la mort ») en cas d’erreur de pseudonyme ou si la règle n’a pas été respectée (pas de contact, escalier, à distance…). Un joueur touché qui ne déclare rien : « Déclarer mort·e ».
 - **Fantôme qui parle** : avertissement, puis exclusion.
 - **Codes erronés à répétition** (blocage automatique d’une minute, signalé dans le journal) : possible tentative de triche.
 - **Téléphone déchargé** : déclarez la mort si le joueur est éliminé, sinon donnez-lui un code de reconnexion sur un autre téléphone, ou « A quitté la partie ».

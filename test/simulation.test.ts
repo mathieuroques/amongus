@@ -45,7 +45,7 @@ function invariants(s: GameState, now: number) {
       expect(p.challenge?.purpose).not.toBe('fix');
       if (p.body && !p.body.reported && !p.body.vanished) expect(p.challenge).toBeUndefined();
     }
-    if (p.disputed) expect(p.deathCause === 'killed' || p.alive === false).toBe(true);
+    if (p.alive) expect(p.killedBy).toBeUndefined();
     if (p.lastStationId) expect(s.terrain.stations.some((x) => x.id === p.lastStationId)).toBe(true);
   }
   if (s.sabotage) for (const h of s.sabotage.holds) expect(s.players.find((p) => p.id === h.playerId)?.alive).toBe(true);
@@ -99,15 +99,14 @@ function playerMove(s: GameState, pid: string, r: Rng, now: number): PlayerActio
       return { type: 'vote', target };
     }
   }
-  if (p.role === 'impostor') {
-    if (roll < 14) {
-      // souvent un équipier vivant, parfois n'importe qui (allié, mort, parti, soi-même, inconnu)
-      const victim = r.int(4) ? pick(r, s.players.filter((x) => x.alive && x.role === 'crewmate')) : pick(r, s.players);
-      return { type: 'kill', target: r.int(20) ? victim?.id ?? 'x' : 'inconnu' };
-    }
-    if (roll < 20) return { type: 'sabotage', kind: pick(r, SAB)! };
+  if (p.role === 'impostor' && roll < 20) return { type: 'sabotage', kind: pick(r, SAB)! };
+  if (p.alive && roll < 4) {
+    // la victime déclare qui l'a touchée : le plus souvent un imposteur prêt, parfois n'importe qui
+    // (équipier, mort, parti, soi-même, inconnu, « je n'ai pas vu »)
+    const ready = s.players.filter((x) => x.alive && !x.left && x.role === 'impostor' && now >= x.killCooldownUntil);
+    const killer = r.int(6) ? pick(r, ready) : pick(r, s.players);
+    if (killer || !r.int(3)) return { type: 'killedBy', killer: r.int(25) ? killer?.id ?? 'unknown' : 'inconnu' };
   }
-  if (!p.alive && roll < 3) return { type: 'dispute' };
   if (roll < 4) {
     const body = pick(r, s.players.filter((x) => x.body && !x.body.reported && !x.body.vanished));
     return { type: 'report', code: body && r.int(3) ? body.body!.code : String(r.int(10000)).padStart(4, '0') };
@@ -127,9 +126,8 @@ function playerMove(s: GameState, pid: string, r: Rng, now: number): PlayerActio
     { type: 'scan', code: r.int(2) ? st('task') : 'QQQQ' },
     { type: 'scan', code: st('vitals') },
     { type: 'cancelChallenge' },
-    { type: 'kill', target: pick(r, s.players)?.id ?? 'x' },
+    { type: 'killedBy', killer: pick(r, s.players)?.id ?? 'x' },
     { type: 'readyVote' },
-    { type: 'dispute' },
     { type: 'vote', target: 'skip' },
     { type: 'checkIn' },
     { type: 'alert', message: 'test' },

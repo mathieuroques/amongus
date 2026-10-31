@@ -7,11 +7,10 @@
 
 ## Éliminer
 1. Attendez la fin de votre délai (30 s au début, puis 60 s après chaque élimination et chaque réunion). Inutile de vérifier sans cesse : **votre téléphone vibre brièvement** quand l’élimination redevient possible (une vibration plus longue en trois temps : le sabotage). Pas de vibration sur iPhone : le panneau affiche « prête » ou le temps restant.
-2. Ouvrez **Rôle → Actions** avant d’approcher (la liste des pseudonymes est triée par ordre alphabétique, avec une recherche au-delà de 8 joueurs ; vos alliés n’y figurent pas).
-3. Approchez votre cible **en marchant**, touchez légèrement son épaule (ou, si elle a demandé « sans contact », placez-vous à portée de bras) et murmurez « éliminé·e ».
-4. Touchez son pseudonyme puis **Valider** : c’est fait, la victime n’a rien à saisir. Éloignez-vous. Votre victime disparaît de votre liste.
+2. Approchez votre cible **en marchant**, touchez légèrement son épaule (ou, si elle a demandé « sans contact », placez-vous à portée de bras) et murmurez « éliminé·e ».
+3. **Vous n’avez rien à saisir** : c’est la victime qui déclare son élimination sur son téléphone, en choisissant discrètement qui l’a touchée. Éloignez-vous l’air de rien. Dans **Rôle → Actions**, votre délai d’élimination repart dès qu’elle a validé.
 
-Interdit : escaliers, zones de passage, zones interdites, contact brusque, éliminer à distance (sans être à portée de bras), éliminer pendant une réunion. Vous ne pouvez pas éliminer un autre imposteur. Une victime qui conteste prévient le MJ, qui peut annuler l’élimination.
+Interdit : escaliers, zones de passage, zones interdites, contact brusque, éliminer à distance (sans être à portée de bras), éliminer avant la fin de votre délai, éliminer pendant une réunion. Vous ne pouvez pas éliminer un autre imposteur. Toute élimination douteuse (délai pas écoulé, victime qui n’a pas vu qui l’a touchée) est signalée au MJ, qui peut l’annuler.
 
 ## Saboter (onglet Rôle → Actions)
 Un seul sabotage à la fois, délai partagé avec vos alliés (10 s au début, 30 s après la fin de chaque sabotage).

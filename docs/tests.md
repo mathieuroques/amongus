@@ -7,7 +7,7 @@
 | Suite | Contenu | Résultat |
 |---|---|---|
 | Vérification des types | client + serveur (TypeScript strict) | ✅ aucune erreur |
-| Moteur de règles (`test/engine.test.ts`) | règles, transitions, vues filtrées, corrections du MJ, élimination par choix et contestation, fausses tâches, ordre et proximité des tâches, réunions (majorité, prêt à voter), panne de courant | ✅ **62/62** |
+| Moteur de règles (`test/engine.test.ts`) | règles, transitions, vues filtrées, corrections du MJ, élimination déclarée par la victime et cas douteux signalés au MJ, fausses tâches, ordre et proximité des tâches, réunions (majorité, prêt à voter), panne de courant | ✅ **62/62** |
 | Modules (`test/modules.test.ts`) | les 11 mini-jeux et 3 réparations (bonne réponse acceptée, mauvaises refusées, réponses papier jamais envoyées), énigmes imprimées, codes et aléatoire, paramètres hors bornes, terrain (génération 1 à 25 pièces, 500 terrains malformés), notifications (contenu public uniquement), outils de test du MJ, abonnements push, énigmes à questions tirées au hasard, lecture des QR codes | ✅ **40/40** |
 | Connexion (`test/net.test.ts`) | action gardée pendant une reconnexion (faux WebSocket, horloge simulée) : coupure courte, longue, connexion « fantôme » au retour de veille, plusieurs actions, fermeture | ✅ **6/6** |
 | Notifications push (`test/webpush.test.ts`) | chiffrement identique **au vecteur officiel de la RFC 8291**, jeton VAPID vérifié, refus des hôtes inconnus, aller-retour complet (déchiffrement côté téléphone) | ✅ **4/4** |
@@ -30,7 +30,8 @@
 - **Fausse tâche d’un imposteur** : même message que l’équipier (« Tâche terminée ! » / « Étape validée ! »), compteur de l’onglet qui baisse, liste qui avance ; la barre de l’équipage ne bouge pas.
 - **Caméra réelle simulée** : un Chromium dont la webcam filme un vrai QR code (vidéo générée par le test) ; la caméra s’ouvre seule sur l’onglet Poste, le lecteur décode l’image et la tâche démarre sans aucune saisie. Une 2ᵉ caméra filme l’affiche d’invitation pendant 8 s : message « Ce QR code n’est pas celui d’un poste », **aucun code erroné compté, aucun blocage**.
 - **Coupures réseau réelles** (relais WebSocket contrôlé par le test) : action faite pendant une coupure de 2 s → bandeau « Reconnexion… » immédiat, puis l’action part **une seule fois** au retour ; coupure de plus de 5 s → refus clair, et l’action n’est **jamais** envoyée après coup.
-- **Élimination par choix du pseudonyme** : panneau d’actions neutre (pas de carte de rôle, pas de rouge, pas le mot « IMPOSTEUR »), alliés absents de la liste, barre de confirmation ; la victime n’a rien à saisir, son écran devient un corps (code en très gros + QR code) et **vibre** ; l’imposteur reçoit **une courte vibration** quand son élimination redevient possible.
+- **Élimination déclarée par la victime** : panneau d’actions neutre (pas de carte de rôle, pas de rouge, pas le mot « IMPOSTEUR »), sans aucune liste de victimes ; la victime choisit qui l’a touchée parmi tous les vivants (onglet Urgence), son écran devient un corps (code en très gros + QR code), **vibre** et n’affiche jamais le nom du tueur ; l’imposteur reçoit **une courte vibration** quand son élimination redevient possible.
+- **Mini-jeu** : « Abandonner ce mini-jeu » demande une confirmation et disparaît pendant la validation ; après une réponse acceptée, le mini-jeu n’est jamais relancé.
 - **Corps signalé en filmant le QR code** affiché par le téléphone du corps (2ᵉ caméra simulée), confirmation, écran « RÉUNION ! » sur tous les téléphones, rappel du badge fantôme, rassemblement, **« Prêt à voter » : le vote s’ouvre dès que 3 vivants sur 4 sont prêts** (discussion réglée à 120 s), vote avec barre de confirmation, annonce du rôle de l’éjecté, écrans « Vous avez gagné / perdu », écran de fin du MJ.
 - Nouvelle partie, rechargement de page (rôle conservé), pause, arrêt d’urgence, reprise avec confirmation, cartes joueurs du MJ.
 - **Petits écrans 360×640** : accueil, règles, tableau de bord du MJ, puis **chaque onglet de chaque joueur**, le panneau d’actions, la carte de rôle et l’écran du corps (code sur une seule ligne, ≥ 56 px) : aucun défilement horizontal. Génération du PDF des supports.
@@ -77,12 +78,12 @@
 | 26 | Nombre maximal de joueurs (40) | unitaire ; intégration (+ refus du 41ᵉ) ; simulation (jusqu’à 40) |
 | 27 | Fin de partie et nouvelle partie | unitaire ; intégration ; navigateur ; simulation (enchaînement de parties) |
 
-Autres : outils du MJ (test des tâches via le serveur, test d’alerte, abonnements push) en intégration ; minuteur du serveur (rassemblement raccourci à 15 s par l’alarme du Durable Object dès que la majorité a pointé) ; panne de courant (tâches possibles, signalement refusé) ; contestation d’élimination reçue par le MJ seul ; persistance après redémarrage du serveur.
+Autres : outils du MJ (test des tâches via le serveur, test d’alerte, abonnements push) en intégration ; minuteur du serveur (rassemblement raccourci à 15 s par l’alarme du Durable Object dès que la majorité a pointé) ; panne de courant (tâches possibles, signalement refusé) ; élimination à vérifier reçue par le MJ seul ; persistance après redémarrage du serveur.
 
 ### Nouveautés de la version 2 et tests correspondants
 | Changement | Unitaires / simulation | Intégration | Navigateur |
 |---|---|---|---|
-| Élimination par choix du pseudonyme, contestation | délais, alliés, morts, partis, soi-même, inconnus, refus sans consommer le délai ; le tueur seul voit sa victime morte ; une contestation par mort ; notifications sans nom | ✅ | ✅ |
+| Élimination déclarée par la victime, cas douteux | délais, imposteurs, morts, partis, soi-même, inconnus, refus sans tuer ni consommer le délai ; nom d’un équipier ou tueur inconnu : mort quand même et alerte au MJ ; le tueur seul voit sa victime morte ; jamais le nom du tueur chez la victime ; notifications sans nom | ✅ | ✅ |
 | Panneau d’actions neutre, vibrations « prêt » | — | — | ✅ (vibrations enregistrées) |
 | Fausses tâches identiques | même réponse, même progression, jamais de victoire par les tâches d’un imposteur ; simulation : jamais de progression de la barre | ✅ | ✅ |
 | Ordre personnel, prochaine étape proche | commune jamais en tête (300 tirages), 40 joueurs répartis sur ≥ 4 postes, proximité même pièce/même étage | ✅ | ✅ |
@@ -103,7 +104,7 @@ Autres : outils du MJ (test des tâches via le serveur, test d’alerte, abonnem
 
 ## Limites connues
 - Présence physique au poste ou près de la victime non prouvée techniquement (règle d’honneur, journal, arbitrage du MJ).
-- L’élimination par choix du pseudonyme ne prouve pas la proximité : une élimination à distance est interdite par le règlement, la victime peut la contester et le MJ l’annuler.
+- L’élimination déclarée par la victime ne prouve ni la proximité ni le bon nom : un cas douteux est signalé au MJ, qui peut annuler la mort.
 - Vibrations « prêt » de l’imposteur et de la victime : Android uniquement (aucune vibration depuis une page web sur iPhone).
 - Les anciennes bandes « puzzle » (une seule lettre par bande) doivent être réimprimées ; les anciennes grilles « inventaire » restent utilisables.
 - iPhone : pas de vibration ; notifications uniquement si le jeu est installé sur l’écran d’accueil.
