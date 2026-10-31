@@ -143,3 +143,5 @@ wrangler.jsonc    configuration Cloudflare (Durable Object SQLite, fichiers stat
 - Chaque appareil ne reçoit que ce qu’il a le droit de savoir (rôles, codes de postes, réponses, votes et journal secret restent sur le serveur).
 - Dépendances d’exécution : `preact`, `qrcode`, `jsqr` (chargé seulement à l’ouverture de la caméra), `marked`. Notifications push sans bibliothèque : WebCrypto (`src/shared/webpush.ts`, vérifié avec le vecteur officiel de la RFC 8291).
 - Variables d’environnement : aucune pour fonctionner (voir `.env.example` pour le déploiement automatique).
+
+<!-- Test PR : modification sans effet -->
